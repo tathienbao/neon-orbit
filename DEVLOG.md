@@ -4,7 +4,55 @@ Nhật ký phát triển dự án game Neon Marble.
 
 ---
 
-## 2025-12-25
+## 2025-12-25 (Tối)
+
+### Cloudflare Workers Backend
+
+**Backend mới (Cloudflare Workers + Durable Objects):**
+- Tạo `worker/` folder với cấu trúc Cloudflare Workers
+- Implement `GameRoom` Durable Object để quản lý phòng chơi
+- Migrate từ Socket.io sang native WebSocket API
+- Mỗi room là một Durable Object instance riêng biệt
+
+**Thay đổi Frontend:**
+- Rewrite `useMultiplayer.ts` để dùng native WebSocket
+- Xóa dependency socket.io-client
+- Hỗ trợ auto-detect server URL cho cả local và production
+
+**Files mới:**
+- `worker/package.json` - Worker dependencies
+- `worker/wrangler.toml` - Cloudflare Workers config
+- `worker/src/index.ts` - Worker entry point
+- `worker/src/game-room.ts` - Durable Object class
+
+**Scripts mới:**
+- `npm run server` → Chạy Wrangler dev (thay vì Socket.io)
+- `npm run server:legacy` → Chạy Socket.io server cũ
+- `npm run worker:deploy` → Deploy lên Cloudflare
+
+**Trạng thái:**
+- ✅ Worker chạy local với Wrangler dev
+- ✅ Frontend dùng native WebSocket
+- ⏳ Chưa deploy lên production
+
+---
+
+## 2025-12-25 (Chiều)
+
+### Chuẩn bị Deployment
+
+**Documentation:**
+- Viết docs/DEPLOYMENT.md - Hướng dẫn triển khai lên Cloudflare
+- Cập nhật README.md với đầy đủ thông tin dự án
+
+**Quyết định kiến trúc production:**
+- Frontend → Cloudflare Pages (free, global CDN)
+- Backend → Cloudflare Workers + Durable Objects (free tier đủ dùng)
+- Không dùng Render/Vercel/Railway vì muốn tất cả trên 1 platform
+
+---
+
+## 2025-12-25 (Sáng)
 
 ### Online Multiplayer & Code Refactoring
 

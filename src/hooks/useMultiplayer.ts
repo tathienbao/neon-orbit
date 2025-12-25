@@ -1,19 +1,26 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
 import { GameState, Vector2D } from '@/types/game';
 
-// Auto-detect server URL based on current hostname
-// This allows mobile devices on the same network to connect
+// Get WebSocket URL based on environment
 const getServerUrl = () => {
+  // Production: Use VITE_SERVER_URL environment variable
+  if (import.meta.env.VITE_SERVER_URL) {
+    const url = import.meta.env.VITE_SERVER_URL;
+    // Convert http(s) to ws(s)
+    return url.replace(/^http/, 'ws');
+  }
+
+  // Development: Auto-detect based on hostname
   const hostname = window.location.hostname;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
   // If accessing via IP (not localhost), use same IP for server
   if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return `http://${hostname}:3001`;
+    return `${protocol}//${hostname}:3001`;
   }
-  return import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
-};
 
-const SERVER_URL = getServerUrl();
+  return 'ws://localhost:3001';
+};
 
 export interface RoomInfo {
   roomCode: string;
@@ -49,8 +56,18 @@ interface UseMultiplayerReturn extends MultiplayerState {
   disconnect: () => void;
 }
 
+interface Message {
+  type: string;
+  [key: string]: unknown;
+}
+
 export function useMultiplayer(): UseMultiplayerReturn {
-  const socketRef = useRef<Socket | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const playerIdRef = useRef<string | null>(null);
+  const pendingCallbacksRef = useRef<Map<string, (data: unknown) => void>>(new Map());
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+
   const [state, setState] = useState<MultiplayerState>({
     isConnected: false,
     isInRoom: false,
@@ -68,220 +85,313 @@ export function useMultiplayer(): UseMultiplayerReturn {
     onSendGameStateRequest?: () => void;
   }>({});
 
-  // Initialize socket connection
-  useEffect(() => {
-    console.log('Connecting to server:', SERVER_URL);
+  const send = useCallback((message: Message) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(message));
+    }
+  }, []);
 
-    const socket = io(SERVER_URL, {
-      transports: ['websocket', 'polling'],
-      autoConnect: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
+  const handleMessage = useCallback((data: string) => {
+    let message: Message;
+    try {
+      message = JSON.parse(data);
+    } catch {
+      return;
+    }
 
-    socketRef.current = socket;
+    switch (message.type) {
+      case 'connected':
+        playerIdRef.current = message.playerId as string;
+        setState(prev => ({ ...prev, isConnected: true, error: null }));
+        reconnectAttemptsRef.current = 0;
+        break;
 
-    socket.on('connect', () => {
-      console.log('Connected to game server, socket id:', socket.id);
-      setState(prev => ({ ...prev, isConnected: true, error: null }));
-    });
-
-    socket.on('disconnect', (reason) => {
-      console.log('Disconnected from game server:', reason);
-      setState(prev => ({ ...prev, isConnected: false }));
-    });
-
-    socket.on('connect_error', (err) => {
-      console.error('Connection error:', err.message);
-      setState(prev => ({ ...prev, error: 'Không thể kết nối server' }));
-    });
-
-    socket.on('player-joined', (data: { playerName: string; playerIndex: number }) => {
-      console.log('Player joined:', data);
-      setState(prev => ({
-        ...prev,
-        roomInfo: prev.roomInfo ? {
-          ...prev.roomInfo,
-          opponentName: data.playerName
-        } : null
-      }));
-    });
-
-    socket.on('player-ready-update', (data: { playerIndex: number; ready: boolean }) => {
-      console.log('Player ready update:', data);
-      setState(prev => {
-        if (prev.roomInfo && data.playerIndex !== prev.roomInfo.playerIndex) {
-          return { ...prev, opponentReady: data.ready };
+      case 'room-created': {
+        const callback = pendingCallbacksRef.current.get('create-room');
+        if (callback) {
+          callback(message);
+          pendingCallbacksRef.current.delete('create-room');
         }
-        return prev;
-      });
-    });
-
-    socket.on('game-start', () => {
-      console.log('Game starting!');
-      setState(prev => ({ ...prev, gameStarted: true }));
-    });
-
-    socket.on('opponent-shoot', (data: { direction: Vector2D; power: number }) => {
-      console.log('Opponent shoot:', data);
-      if (callbacksRef.current.onOpponentShoot) {
-        callbacksRef.current.onOpponentShoot(data);
+        break;
       }
-    });
 
-    socket.on('game-state-sync', (gameState: GameState) => {
-      console.log('Game state sync received');
-      if (callbacksRef.current.onGameStateSync) {
-        callbacksRef.current.onGameStateSync(gameState);
+      case 'room-joined': {
+        const callback = pendingCallbacksRef.current.get('join-room');
+        if (callback) {
+          callback(message);
+          pendingCallbacksRef.current.delete('join-room');
+        }
+        break;
       }
-    });
 
-    socket.on('game-state-init', (gameState: GameState) => {
-      console.log('Game state init received');
-      if (callbacksRef.current.onGameStateSync) {
-        callbacksRef.current.onGameStateSync(gameState);
+      case 'join-error': {
+        const callback = pendingCallbacksRef.current.get('join-room');
+        if (callback) {
+          callback(message);
+          pendingCallbacksRef.current.delete('join-room');
+        }
+        break;
       }
-    });
 
-    socket.on('game-restarted', (gameState: GameState) => {
-      console.log('Game restarted');
-      if (callbacksRef.current.onGameRestart) {
-        callbacksRef.current.onGameRestart(gameState);
+      case 'player-joined':
+        setState(prev => ({
+          ...prev,
+          roomInfo: prev.roomInfo ? {
+            ...prev.roomInfo,
+            opponentName: message.playerName as string,
+          } : null,
+        }));
+        break;
+
+      case 'player-ready-update':
+        setState(prev => {
+          if (prev.roomInfo && message.playerIndex !== prev.roomInfo.playerIndex) {
+            return { ...prev, opponentReady: message.ready as boolean };
+          }
+          return prev;
+        });
+        break;
+
+      case 'game-start':
+        setState(prev => ({ ...prev, gameStarted: true }));
+        break;
+
+      case 'opponent-shoot':
+        if (callbacksRef.current.onOpponentShoot) {
+          callbacksRef.current.onOpponentShoot({
+            direction: message.direction as Vector2D,
+            power: message.power as number,
+          });
+        }
+        break;
+
+      case 'game-state-sync':
+      case 'game-state-init':
+        if (callbacksRef.current.onGameStateSync) {
+          callbacksRef.current.onGameStateSync(message.gameState as GameState);
+        }
+        break;
+
+      case 'game-restarted':
+        if (callbacksRef.current.onGameRestart) {
+          callbacksRef.current.onGameRestart(message.gameState as GameState);
+        }
+        break;
+
+      case 'player-disconnected':
+        setState(prev => ({
+          ...prev,
+          error: 'Đối thủ đã ngắt kết nối',
+          opponentReady: false,
+        }));
+        break;
+
+      case 'send-game-state':
+        if (callbacksRef.current.onSendGameStateRequest) {
+          callbacksRef.current.onSendGameStateRequest();
+        }
+        break;
+
+      case 'became-host':
+        setState(prev => ({
+          ...prev,
+          roomInfo: prev.roomInfo ? { ...prev.roomInfo, isHost: true } : null,
+        }));
+        break;
+    }
+  }, []);
+
+  const connect = useCallback((roomCode?: string, action?: 'create' | 'join') => {
+    // Close existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
+    const baseUrl = getServerUrl();
+    let wsUrl = `${baseUrl}/ws`;
+
+    if (roomCode) {
+      wsUrl += `?room=${roomCode}`;
+      if (action) {
+        wsUrl += `&action=${action}`;
       }
-    });
+    } else if (action === 'create') {
+      wsUrl += '?action=create';
+    }
 
-    socket.on('player-disconnected', () => {
-      console.log('Opponent disconnected');
-      setState(prev => ({
-        ...prev,
-        error: 'Đối thủ đã ngắt kết nối',
-        opponentReady: false
-      }));
-    });
+    console.log('Connecting to WebSocket:', wsUrl);
+    const ws = new WebSocket(wsUrl);
 
-    // Host receives request to send game state
-    socket.on('send-game-state', () => {
-      console.log('Received request to send game state');
-      if (callbacksRef.current.onSendGameStateRequest) {
-        callbacksRef.current.onSendGameStateRequest();
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      handleMessage(event.data);
+    };
+
+    ws.onclose = (event) => {
+      console.log('WebSocket closed:', event.code, event.reason);
+      setState(prev => ({ ...prev, isConnected: false }));
+
+      // Attempt reconnection if in a room
+      if (state.isInRoom && reconnectAttemptsRef.current < 5) {
+        reconnectAttemptsRef.current++;
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          if (state.roomInfo) {
+            connect(state.roomInfo.roomCode, 'join');
+          }
+        }, delay);
       }
-    });
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setState(prev => ({ ...prev, error: 'Không thể kết nối server' }));
+    };
+
+    wsRef.current = ws;
+  }, [handleMessage, state.isInRoom, state.roomInfo]);
+
+  // Initial connection (no room)
+  useEffect(() => {
+    connect();
 
     return () => {
-      console.log('Cleaning up socket connection');
-      socket.disconnect();
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
     };
   }, []);
 
   const createRoom = useCallback((playerName: string): Promise<RoomInfo> => {
     return new Promise((resolve, reject) => {
-      if (!socketRef.current || !socketRef.current.connected) {
-        reject(new Error('Chưa kết nối server'));
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        // Reconnect with create action
+        connect(undefined, 'create');
+
+        // Wait for connection
+        const checkConnection = setInterval(() => {
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            clearInterval(checkConnection);
+            doCreate();
+          }
+        }, 100);
+
+        setTimeout(() => {
+          clearInterval(checkConnection);
+          reject(new Error('Không thể kết nối server'));
+        }, 5000);
+
         return;
       }
 
-      console.log('Creating room for:', playerName);
-      socketRef.current.emit('create-room', playerName, (response: any) => {
-        console.log('Create room response:', response);
-        if (response.success) {
-          const roomInfo: RoomInfo = {
-            roomCode: response.roomCode,
-            playerIndex: response.playerIndex,
-            isHost: true,
-          };
-          setState(prev => ({
-            ...prev,
-            isInRoom: true,
-            roomInfo,
-            error: null,
-            isReady: false,
-            opponentReady: false,
-            gameStarted: false,
-          }));
-          resolve(roomInfo);
-        } else {
-          reject(new Error(response.error));
-        }
-      });
+      doCreate();
+
+      function doCreate() {
+        pendingCallbacksRef.current.set('create-room', (response: unknown) => {
+          const msg = response as Message;
+          if (msg.success) {
+            const roomInfo: RoomInfo = {
+              roomCode: msg.roomCode as string,
+              playerIndex: msg.playerIndex as number,
+              isHost: true,
+            };
+            setState(prev => ({
+              ...prev,
+              isInRoom: true,
+              roomInfo,
+              error: null,
+              isReady: false,
+              opponentReady: false,
+              gameStarted: false,
+            }));
+            resolve(roomInfo);
+          } else {
+            reject(new Error((msg.error as string) || 'Không thể tạo phòng'));
+          }
+        });
+
+        send({ type: 'create-room', playerName });
+      }
     });
-  }, []);
+  }, [connect, send]);
 
   const joinRoom = useCallback((roomCode: string, playerName: string): Promise<RoomInfo> => {
     return new Promise((resolve, reject) => {
-      if (!socketRef.current || !socketRef.current.connected) {
-        reject(new Error('Chưa kết nối server'));
-        return;
-      }
+      const normalizedCode = roomCode.toUpperCase();
 
-      console.log('Joining room:', roomCode, 'as:', playerName);
-      socketRef.current.emit('join-room', roomCode, playerName, (response: any) => {
-        console.log('Join room response:', response);
-        if (response.success) {
-          const roomInfo: RoomInfo = {
-            roomCode: response.roomCode,
-            playerIndex: response.playerIndex,
-            hostName: response.hostName,
-            isHost: false,
-          };
-          setState(prev => ({
-            ...prev,
-            isInRoom: true,
-            roomInfo,
-            opponentReady: false,
-            isReady: false,
-            gameStarted: false,
-            error: null,
-          }));
-          resolve(roomInfo);
-        } else {
-          reject(new Error(response.error));
+      // Connect to the specific room
+      connect(normalizedCode, 'join');
+
+      // Wait for connection and set up callback
+      const checkConnection = setInterval(() => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && playerIdRef.current) {
+          clearInterval(checkConnection);
+
+          pendingCallbacksRef.current.set('join-room', (response: unknown) => {
+            const msg = response as Message;
+            if (msg.type === 'room-joined' && msg.success) {
+              const roomInfo: RoomInfo = {
+                roomCode: msg.roomCode as string,
+                playerIndex: msg.playerIndex as number,
+                hostName: msg.hostName as string,
+                isHost: false,
+              };
+              setState(prev => ({
+                ...prev,
+                isInRoom: true,
+                roomInfo,
+                opponentReady: false,
+                isReady: false,
+                gameStarted: false,
+                error: null,
+              }));
+              resolve(roomInfo);
+            } else {
+              reject(new Error((msg.error as string) || 'Không thể vào phòng'));
+            }
+          });
+
+          send({ type: 'join-room', roomCode: normalizedCode, playerName });
         }
-      });
+      }, 100);
+
+      setTimeout(() => {
+        clearInterval(checkConnection);
+        reject(new Error('Không thể kết nối server'));
+      }, 5000);
     });
-  }, []);
+  }, [connect, send]);
 
   const setReady = useCallback(() => {
-    if (socketRef.current && socketRef.current.connected) {
-      console.log('Setting ready');
-      socketRef.current.emit('player-ready');
-      setState(prev => ({ ...prev, isReady: true }));
-    }
-  }, []);
+    send({ type: 'player-ready' });
+    setState(prev => ({ ...prev, isReady: true }));
+  }, [send]);
 
   const sendShoot = useCallback((direction: Vector2D, power: number) => {
-    if (socketRef.current && socketRef.current.connected) {
-      console.log('Sending shoot:', { direction, power });
-      socketRef.current.emit('player-shoot', { direction, power });
-    }
-  }, []);
+    send({ type: 'player-shoot', direction, power });
+  }, [send]);
 
   const sendGameState = useCallback((gameState: GameState) => {
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('game-state-update', gameState);
-    }
-  }, []);
+    send({ type: 'game-state-update', gameState });
+  }, [send]);
 
   const sendRestart = useCallback((gameState: GameState) => {
-    if (socketRef.current && socketRef.current.connected) {
-      console.log('Sending restart');
-      socketRef.current.emit('restart-game', gameState);
-    }
-  }, []);
+    send({ type: 'restart-game', gameState });
+  }, [send]);
 
   const initGameState = useCallback((gameState: GameState) => {
-    if (socketRef.current && socketRef.current.connected) {
-      console.log('Sending init game state');
-      socketRef.current.emit('init-game-state', gameState);
-    }
-  }, []);
+    send({ type: 'init-game-state', gameState });
+  }, [send]);
 
   const requestGameState = useCallback(() => {
-    if (socketRef.current && socketRef.current.connected) {
-      console.log('Requesting game state from server');
-      socketRef.current.emit('request-game-state');
-    }
-  }, []);
+    send({ type: 'request-game-state' });
+  }, [send]);
 
   const onOpponentShoot = useCallback((callback: (data: { direction: Vector2D; power: number }) => void) => {
     callbacksRef.current.onOpponentShoot = callback;
@@ -300,8 +410,7 @@ export function useMultiplayer(): UseMultiplayerReturn {
   }, []);
 
   const disconnect = useCallback(() => {
-    console.log('Disconnecting from room');
-    // Just reset state, keep socket connected for new games
+    // Reset state
     setState(prev => ({
       ...prev,
       isInRoom: false,
@@ -311,15 +420,17 @@ export function useMultiplayer(): UseMultiplayerReturn {
       gameStarted: false,
       error: null,
     }));
+
     // Clear callbacks
     callbacksRef.current = {};
+    pendingCallbacksRef.current.clear();
 
-    // Reconnect socket to get fresh state
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-      socketRef.current.connect();
+    // Reconnect fresh
+    if (wsRef.current) {
+      wsRef.current.close();
     }
-  }, []);
+    connect();
+  }, [connect]);
 
   return {
     ...state,

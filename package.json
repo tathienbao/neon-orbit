@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "node server/index.js",
+    "server": "cd worker && npm run dev",
+    "server:legacy": "node server/index.js",
     "dev:all": "npm run server & npm run dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "worker:install": "cd worker && npm install",
+    "worker:deploy": "cd worker && npm run deploy"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

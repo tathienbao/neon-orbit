@@ -27,7 +27,8 @@ Game bắn bi 2 người chơi với phong cách neon cyberpunk. Hỗ trợ chơ
 ## Tech Stack
 
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS, shadcn/ui
-- **Backend:** Node.js, Express, Socket.io
+- **Backend (Production):** Cloudflare Workers + Durable Objects
+- **Backend (Local Dev):** Wrangler (local Cloudflare simulator)
 - **Rendering:** HTML5 Canvas
 
 ## Cài đặt
@@ -37,12 +38,13 @@ Game bắn bi 2 người chơi với phong cách neon cyberpunk. Hỗ trợ chơ
 git clone https://github.com/tathienbao/neon-orbit.git
 cd neon-orbit
 
-# Cài dependencies
+# Cài dependencies (frontend + worker)
 npm install
+npm run worker:install
 
 # Chạy development
 npm run dev          # Chỉ frontend (local mode)
-npm run server       # Chỉ backend (online mode)
+npm run server       # Backend với Wrangler (online mode)
 npm run dev:all      # Cả frontend + backend
 ```
 
@@ -60,23 +62,31 @@ npm run dev:all      # Cả frontend + backend
 
 ```
 neon-orbit/
+├── worker/                   # Backend (Cloudflare Workers)
+│   ├── src/
+│   │   ├── index.ts         # Worker entry point
+│   │   └── game-room.ts     # Durable Object
+│   ├── wrangler.toml        # Cloudflare config
+│   └── package.json
 ├── server/
-│   └── index.js          # WebSocket server
+│   └── index.js             # Legacy Socket.io server
 ├── src/
-│   ├── components/       # React components
+│   ├── components/          # React components
 │   │   ├── GameCanvas.tsx
 │   │   ├── Joystick.tsx
 │   │   ├── LobbyScreen.tsx
 │   │   └── ...
 │   ├── config/
-│   │   └── gameConfig.ts # Cấu hình game tập trung
+│   │   └── gameConfig.ts    # Cấu hình game tập trung
 │   ├── hooks/
 │   │   └── useMultiplayer.ts
 │   ├── types/
 │   │   └── game.ts
 │   └── utils/
-│       ├── physics.ts    # Engine vật lý
+│       ├── physics.ts       # Engine vật lý
 │       └── mapGenerator.ts
+├── docs/
+│   └── DEPLOYMENT.md        # Hướng dẫn deploy
 └── package.json
 ```
 
@@ -85,10 +95,11 @@ neon-orbit/
 | Script | Mô tả |
 |--------|-------|
 | `npm run dev` | Chạy frontend dev server |
-| `npm run server` | Chạy WebSocket server |
-| `npm run dev:all` | Chạy cả 2 |
+| `npm run server` | Chạy Wrangler dev server |
+| `npm run dev:all` | Chạy cả frontend + backend |
 | `npm run build` | Build production |
-| `npm run preview` | Preview build |
+| `npm run worker:install` | Cài dependencies cho worker |
+| `npm run worker:deploy` | Deploy worker lên Cloudflare |
 
 ## License
 
