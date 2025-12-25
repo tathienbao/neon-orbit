@@ -176,9 +176,110 @@ Nếu interpolation quá phức tạp, có thể dùng giải pháp đơn giản
 
 ---
 
-## Quyết định: Entity Interpolation
+## Quyết định: Buffered Playback (Custom Solution)
 
-User đã chọn: **Entity Interpolation** - Giải pháp mượt mà nhất, không cần thử Simple Fix trước.
+User đã chọn: **Buffered Playback** - Giải pháp sáng tạo riêng, kết hợp ưu điểm của nhiều phương pháp.
+
+---
+
+## Giải pháp cuối cùng: Buffered Playback
+
+### Ý tưởng cốt lõi
+
+Thay vì interpolation phức tạp với timestamps, dùng **queue-based playback**:
+- Người chơi đang bắn: chạy physics locally, gửi states liên tục
+- Người chơi đợi: buffer tất cả states vào queue, phát lại theo thứ tự
+
+### Tại sao hoạt động?
+
+1. **Đây là game turn-based** → delay 0.5s không ảnh hưởng gameplay
+2. **Buffer absorbs network jitter** → states đến không đều nhưng phát lại đều
+3. **Thứ tự được bảo toàn** → animation luôn liền mạch, không nhảy frame
+4. **Đơn giản hơn interpolation** → không cần timestamps, không cần lerp
+
+### Flow
+
+```
+Player đang chơi (active):
+  ┌─────────────────────────────────┐
+  │ Physics Loop (60fps)            │
+  │   ↓                             │
+  │ Update gameState + displayState │
+  │   ↓                             │
+  │ sendGameState() to opponent     │
+  └─────────────────────────────────┘
+
+Player đang đợi (passive):
+  ┌─────────────────────────────────┐
+  │ Receive state from network      │
+  │   ↓                             │
+  │ Push to stateBuffer (queue)     │
+  │   ↓                             │
+  │ Playback loop (60fps)           │
+  │   ↓                             │
+  │ Pop from queue → displayState   │
+  └─────────────────────────────────┘
+```
+
+### Xử lý edge cases
+
+1. **Buffer overflow** (network burst): Skip frames để catch up
+2. **Buffer empty** (network slow): Hold last frame
+3. **Turn change**: Clear buffer, apply state trực tiếp
+4. **My turn**: Skip buffering, run physics locally
+
+### Code Architecture
+
+```typescript
+// State management
+const [gameState, setGameState] = useState<GameState | null>(null);
+const [displayState, setDisplayState] = useState<GameState | null>(null);
+const stateBufferRef = useRef<GameState[]>([]);
+
+// Playback loop (Guest only, opponent's turn only)
+useEffect(() => {
+  if (isHost) return;
+
+  const playback = (timestamp: number) => {
+    if (buffer.length > 0) {
+      const state = buffer.shift()!;
+      setDisplayState(state);
+
+      // Catch up if buffer too large
+      if (buffer.length > 10) {
+        buffer.splice(0, buffer.length - 5);
+      }
+    }
+    requestAnimationFrame(playback);
+  };
+
+  requestAnimationFrame(playback);
+}, [isHost]);
+
+// GameCanvas receives displayState for rendering
+<GameCanvas gameState={displayState || gameState} />
+```
+
+### Symmetric Communication
+
+Cả Host và Guest đều:
+- Chạy physics khi đến lượt mình
+- Gửi state updates cho opponent
+- Skip physics khi opponent đang chơi
+- Nhận và hiển thị state từ opponent
+
+```typescript
+// GameCanvas - skip physics when opponent plays
+if (isHostRef.current !== undefined &&
+    state.currentPlayer !== myPlayerIndexRef.current) {
+  return; // Skip physics, just render
+}
+
+// handleGameStateChange - send when my turn
+if (newState.currentPlayer === myPlayerIndex) {
+  multiplayer.sendGameState(newState);
+}
+```
 
 ---
 

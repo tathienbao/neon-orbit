@@ -6,33 +6,41 @@ Nhật ký phát triển dự án game Neon Marble.
 
 ## 2025-12-25 (Đêm)
 
-### Entity Interpolation - Fix Ghost Effect
+### Buffered Playback - Fix Ghost Effect
 
 **Vấn đề:**
-- Player 2 (Guest) thấy bi "nhảy lùi" khi opponent bắn
+- Player 2 (Guest) thấy bi "nhảy lùi" khi opponent bắn (Ghost Effect)
 - Nguyên nhân: Guest chạy physics độc lập, nhận state cũ từ Host (do network latency)
-- Khi ghi đè state → bi nhảy từ vị trí mới về vị trí cũ → ghost effect
+- Khi ghi đè state → bi nhảy từ vị trí mới về vị trí cũ
 
-**Giải pháp: Entity Interpolation**
-- Guest buffer các state nhận được (với timestamp)
-- Render "trong quá khứ" 100ms để luôn có 2 states để interpolate
-- Lerp mượt mà giữa các states thay vì ghi đè trực tiếp
+**Thử nghiệm Entity Interpolation:**
+- Thử dùng timestamp-based interpolation như các game FPS
+- Quá phức tạp, nhiều edge cases, vẫn bị bugs
 
-**Implementation:**
-- Tạo `src/utils/interpolation.ts` - State buffer và lerp functions
-- Thêm timestamp vào game-state-update messages
-- Guest dùng interpolation loop thay vì physics loop khi opponent's turn
-- GameCanvas skip physics khi Guest + opponent's turn
+**Giải pháp cuối cùng: Buffered Playback (Custom)**
+
+Ý tưởng sáng tạo: Vì đây là game turn-based, chấp nhận delay để đổi lấy smoothness.
+
+- Player đang chơi: chạy physics locally, gửi states liên tục
+- Player đang đợi: buffer tất cả states vào queue, phát lại theo thứ tự
+- Buffer absorbs network jitter → animation luôn mượt mà
+- Symmetric: cả Host và Guest đều gửi/nhận states khi đến lượt
+
+**Kiến trúc:**
+```
+Active player:  Physics → displayState → sendGameState()
+Passive player: receiveState → buffer.push() → playback loop → displayState
+```
 
 **Files thay đổi:**
-- `src/utils/interpolation.ts` (MỚI)
-- `src/hooks/useMultiplayer.ts` - Thêm timestamp
-- `src/components/OnlineMarbleGame.tsx` - Interpolation logic
-- `src/components/GameCanvas.tsx` - Skip physics cho Guest
+- `src/components/OnlineMarbleGame.tsx` - Buffered playback logic
+- `src/components/GameCanvas.tsx` - Skip physics khi opponent's turn
+- `docs/PLAN-GHOST-EFFECT-FIX.md` - Document giải pháp
 
 **Kết quả:**
-- Animation mượt mà ngay cả với latency 100-200ms
-- Không còn ghost effect
+- P2 thấy animation mượt mà (delay ~0.5s nhưng liền mạch)
+- P1 cũng thấy mượt khi P2 chơi
+- Không còn ghost effect, không còn freeze
 
 ---
 

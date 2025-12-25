@@ -172,10 +172,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         return;
       }
 
-      // Guest: Skip physics when opponent is playing (online mode only)
+      // Online mode: Skip physics when opponent is playing
       // In local mode (isHost === undefined), always run physics
-      // Guest receives interpolated state from OnlineMarbleGame, so no local physics needed
-      if (isHostRef.current === false && state.currentPlayer !== myPlayerIndexRef.current) {
+      // The player whose turn it is runs physics; the other receives state updates
+      if (isHostRef.current !== undefined && state.currentPlayer !== myPlayerIndexRef.current) {
         animationRef.current = requestAnimationFrame(gameLoop);
         return;
       }
