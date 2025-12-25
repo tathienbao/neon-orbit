@@ -7,12 +7,16 @@ interface GameCanvasProps {
   gameState: GameState;
   onGameStateChange: (state: GameState) => void;
   onTurnEnd: () => void;
+  isHost?: boolean;        // For online mode - undefined means local mode
+  myPlayerIndex?: number;  // For online mode
 }
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({
   gameState,
   onGameStateChange,
   onTurnEnd,
+  isHost,
+  myPlayerIndex,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -22,6 +26,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const gameStateRef = useRef(gameState);
   const onGameStateChangeRef = useRef(onGameStateChange);
   const onTurnEndRef = useRef(onTurnEnd);
+  const isHostRef = useRef(isHost);
+  const myPlayerIndexRef = useRef(myPlayerIndex);
   const animationRef = useRef<number | null>(null);
   const wasMovingRef = useRef(false);
   const scrollAnimationRef = useRef<number | null>(null);
@@ -40,6 +46,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   useEffect(() => {
     onTurnEndRef.current = onTurnEnd;
   }, [onTurnEnd]);
+
+  useEffect(() => {
+    isHostRef.current = isHost;
+  }, [isHost]);
+
+  useEffect(() => {
+    myPlayerIndexRef.current = myPlayerIndex;
+  }, [myPlayerIndex]);
 
   // Smooth scroll animation function
   const animateScrollTo = useCallback((target: number) => {
@@ -154,6 +168,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       // Skip if paused or game over
       if (state.isPaused || state.gameOver) {
+        animationRef.current = requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      // Guest: Skip physics when opponent is playing (online mode only)
+      // In local mode (isHost === undefined), always run physics
+      // Guest receives interpolated state from OnlineMarbleGame, so no local physics needed
+      if (isHostRef.current === false && state.currentPlayer !== myPlayerIndexRef.current) {
         animationRef.current = requestAnimationFrame(gameLoop);
         return;
       }

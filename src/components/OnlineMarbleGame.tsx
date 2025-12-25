@@ -11,6 +11,13 @@ import { PHYSICS_CONFIG, UI_CONFIG } from '@/config/gameConfig';
 import { RoomInfo, useMultiplayer } from '@/hooks/useMultiplayer';
 import { ArrowLeft, Wifi } from 'lucide-react';
 import { Button } from './ui/button';
+import {
+  BufferedState,
+  INTERPOLATION_DELAY,
+  addToBuffer,
+  findInterpolationStates,
+  interpolateGameState,
+} from '@/utils/interpolation';
 
 const { SHOOT_POWER_MULTIPLIER } = PHYSICS_CONFIG;
 
@@ -26,13 +33,20 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
   onLeave,
 }) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [displayState, setDisplayState] = useState<GameState | null>(null);
   const isHost = roomInfo.isHost;
   const myPlayerIndex = roomInfo.playerIndex;
   const initRef = useRef(false);
 
+  // Interpolation state buffer (Guest only)
+  const stateBufferRef = useRef<BufferedState[]>([]);
+  const interpolationFrameRef = useRef<number | null>(null);
+  const isInterpolatingRef = useRef(false);
+
   const initGame = useCallback(() => {
     const newState = generateMap(window.innerWidth, window.innerHeight);
     setGameState(newState);
+    setDisplayState(newState);
 
     if (isHost) {
       // Host sends initial game state to guest
@@ -64,16 +78,76 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
 
   // Listen for game state sync from host
   useEffect(() => {
-    multiplayer.onGameStateSync((newGameState) => {
+    multiplayer.onGameStateSync((newGameState, timestamp) => {
       console.log('Received game state sync');
+
+      // For host or initial state, apply directly
+      if (isHost || !gameState) {
+        setGameState(newGameState);
+        setDisplayState(newGameState);
+        if (!gameState) {
+          toast.success('Game bắt đầu!', {
+            description: 'Bạn là Người chơi 2 (Hồng)',
+          });
+        }
+        return;
+      }
+
+      // Guest: Add to interpolation buffer
+      const ts = timestamp || Date.now();
+      stateBufferRef.current = addToBuffer(stateBufferRef.current, newGameState, ts);
+
+      // Update authoritative state (used for game logic, not display)
       setGameState(newGameState);
-      if (!gameState) {
-        toast.success('Game bắt đầu!', {
-          description: 'Bạn là Người chơi 2 (Hồng)',
-        });
+
+      // Start interpolation loop if not already running and opponent is playing
+      if (!isInterpolatingRef.current && newGameState.currentPlayer !== myPlayerIndex) {
+        isInterpolatingRef.current = true;
       }
     });
-  }, [multiplayer, gameState]);
+  }, [multiplayer, gameState, isHost, myPlayerIndex]);
+
+  // Interpolation loop for Guest when opponent is playing
+  useEffect(() => {
+    if (isHost) return;
+
+    const interpolate = () => {
+      const buffer = stateBufferRef.current;
+
+      // Only interpolate when opponent is playing and we have buffer
+      if (gameState && gameState.currentPlayer !== myPlayerIndex && buffer.length >= 2) {
+        const renderTime = Date.now() - INTERPOLATION_DELAY;
+        const interpData = findInterpolationStates(buffer, renderTime);
+
+        if (interpData) {
+          const interpolated = interpolateGameState(
+            interpData.fromState,
+            interpData.toState,
+            interpData.t
+          );
+          setDisplayState(interpolated);
+        }
+      } else if (gameState) {
+        // When it's my turn or not enough buffer, use actual state
+        setDisplayState(gameState);
+        // Clear buffer when turn changes to me
+        if (gameState.currentPlayer === myPlayerIndex) {
+          stateBufferRef.current = [];
+          isInterpolatingRef.current = false;
+        }
+      }
+
+      interpolationFrameRef.current = requestAnimationFrame(interpolate);
+    };
+
+    interpolationFrameRef.current = requestAnimationFrame(interpolate);
+
+    return () => {
+      if (interpolationFrameRef.current) {
+        cancelAnimationFrame(interpolationFrameRef.current);
+      }
+    };
+  }, [isHost, gameState, myPlayerIndex]);
 
   // Host: listen for request to send game state
   useEffect(() => {
@@ -128,6 +202,8 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
   useEffect(() => {
     multiplayer.onGameRestart((newGameState) => {
       setGameState(newGameState);
+      setDisplayState(newGameState);
+      stateBufferRef.current = []; // Clear buffer on restart
       toast.success('Game mới!');
     });
   }, [multiplayer]);
@@ -230,6 +306,7 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
 
   const handleGameStateChange = useCallback((newState: GameState) => {
     setGameState(newState);
+    setDisplayState(newState);
 
     // Host syncs state changes
     if (isHost) {
@@ -240,6 +317,8 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
   const handleRestart = useCallback(() => {
     const newState = generateMap(window.innerWidth, window.innerHeight);
     setGameState(newState);
+    setDisplayState(newState);
+    stateBufferRef.current = []; // Clear buffer on restart
 
     // Sync restart to opponent
     multiplayer.sendRestart(newState);
@@ -308,9 +387,11 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
         {/* Canvas */}
         <div className="flex-1 w-full max-w-md">
           <GameCanvas
-            gameState={gameState}
+            gameState={displayState || gameState}
             onGameStateChange={handleGameStateChange}
             onTurnEnd={handleTurnEnd}
+            isHost={isHost}
+            myPlayerIndex={myPlayerIndex}
           />
         </div>
 

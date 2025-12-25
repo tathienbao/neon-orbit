@@ -176,9 +176,9 @@ Nếu interpolation quá phức tạp, có thể dùng giải pháp đơn giản
 
 ---
 
-## Quyết định: Simple Fix Trước
+## Quyết định: Entity Interpolation
 
-User đã chọn: **Thử Simple Fix trước**, nếu không đủ mượt thì upgrade lên Interpolation.
+User đã chọn: **Entity Interpolation** - Giải pháp mượt mà nhất, không cần thử Simple Fix trước.
 
 ---
 

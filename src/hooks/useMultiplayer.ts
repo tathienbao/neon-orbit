@@ -50,7 +50,7 @@ interface UseMultiplayerReturn extends MultiplayerState {
   initGameState: (gameState: GameState) => void;
   requestGameState: () => void;
   onOpponentShoot: (callback: (data: { direction: Vector2D; power: number }) => void) => void;
-  onGameStateSync: (callback: (gameState: GameState) => void) => void;
+  onGameStateSync: (callback: (gameState: GameState, timestamp?: number) => void) => void;
   onGameRestart: (callback: (gameState: GameState) => void) => void;
   onSendGameStateRequest: (callback: () => void) => void;
   disconnect: () => void;
@@ -80,7 +80,7 @@ export function useMultiplayer(): UseMultiplayerReturn {
 
   const callbacksRef = useRef<{
     onOpponentShoot?: (data: { direction: Vector2D; power: number }) => void;
-    onGameStateSync?: (gameState: GameState) => void;
+    onGameStateSync?: (gameState: GameState, timestamp?: number) => void;
     onGameRestart?: (gameState: GameState) => void;
     onSendGameStateRequest?: () => void;
   }>({});
@@ -168,7 +168,10 @@ export function useMultiplayer(): UseMultiplayerReturn {
       case 'game-state-sync':
       case 'game-state-init':
         if (callbacksRef.current.onGameStateSync) {
-          callbacksRef.current.onGameStateSync(message.gameState as GameState);
+          callbacksRef.current.onGameStateSync(
+            message.gameState as GameState,
+            message.timestamp as number | undefined
+          );
         }
         break;
 
@@ -378,7 +381,7 @@ export function useMultiplayer(): UseMultiplayerReturn {
   }, [send]);
 
   const sendGameState = useCallback((gameState: GameState) => {
-    send({ type: 'game-state-update', gameState });
+    send({ type: 'game-state-update', gameState, timestamp: Date.now() });
   }, [send]);
 
   const sendRestart = useCallback((gameState: GameState) => {
@@ -397,7 +400,7 @@ export function useMultiplayer(): UseMultiplayerReturn {
     callbacksRef.current.onOpponentShoot = callback;
   }, []);
 
-  const onGameStateSync = useCallback((callback: (gameState: GameState) => void) => {
+  const onGameStateSync = useCallback((callback: (gameState: GameState, timestamp?: number) => void) => {
     callbacksRef.current.onGameStateSync = callback;
   }, []);
 
