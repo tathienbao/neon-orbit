@@ -205,7 +205,8 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
       return;
     }
 
-    const newState = {
+    // Create final state with updated marble positions
+    const newState: GameState = {
       ...gameState,
       currentPlayer: nextPlayer,
     };
@@ -222,7 +223,7 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
       });
     }
 
-    // Host syncs state
+    // Host syncs final state after turn ends
     if (isHost) {
       multiplayer.sendGameState(newState);
     }
@@ -230,12 +231,9 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
 
   const handleGameStateChange = useCallback((newState: GameState) => {
     setGameState(newState);
-
-    // Host syncs state changes
-    if (isHost) {
-      multiplayer.sendGameState(newState);
-    }
-  }, [isHost, multiplayer]);
+    // Don't sync every frame - only sync on turn end and significant events
+    // This prevents jitter on guest's screen
+  }, []);
 
   const handleRestart = useCallback(() => {
     const newState = generateMap(window.innerWidth, window.innerHeight);

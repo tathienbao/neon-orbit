@@ -80,18 +80,37 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   }, [gameState.currentPlayer, gameState.marbles, gameState.mapHeight, animateScrollTo]);
 
-  // Auto-scroll to follow moving marble
+  // Auto-scroll to follow ANY moving marble
   useEffect(() => {
-    const activeMarble = gameState.marbles[gameState.currentPlayer];
-    if (activeMarble && activeMarble.isMoving && containerRef.current) {
-      const containerHeight = containerRef.current.clientHeight;
-      const targetScroll = Math.max(0, Math.min(
-        activeMarble.position.y - containerHeight / 2,
-        gameState.mapHeight - containerHeight
-      ));
-      setScrollY(prev => prev + (targetScroll - prev) * CANVAS_CONFIG.SCROLL_EASING);
-    }
-  }, [gameState.marbles, gameState.currentPlayer, gameState.mapHeight]);
+    if (!containerRef.current) return;
+
+    // Find any moving marble
+    const movingMarble = gameState.marbles.find(m => m.isMoving);
+    if (!movingMarble) return;
+
+    const containerHeight = containerRef.current.clientHeight;
+    const marbleScreenY = movingMarble.position.y - scrollY;
+
+    // Calculate how far marble is from center of screen
+    const centerY = containerHeight / 2;
+    const distanceFromCenter = Math.abs(marbleScreenY - centerY);
+
+    // Use faster easing when marble is far from center
+    // Normal: 0.1, Fast: up to 0.5 when far off screen
+    const baseEasing = 0.1;
+    const maxEasing = 0.5;
+    const threshold = containerHeight * 0.3; // 30% from center
+    const easing = distanceFromCenter > threshold
+      ? Math.min(maxEasing, baseEasing + (distanceFromCenter - threshold) / containerHeight * 0.8)
+      : baseEasing;
+
+    const targetScroll = Math.max(0, Math.min(
+      movingMarble.position.y - containerHeight / 2,
+      gameState.mapHeight - containerHeight
+    ));
+
+    setScrollY(prev => prev + (targetScroll - prev) * easing);
+  }, [gameState.marbles, gameState.mapHeight, scrollY]);
 
   // Cleanup scroll animation on unmount
   useEffect(() => {
