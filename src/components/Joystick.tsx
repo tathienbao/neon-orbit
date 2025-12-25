@@ -1,5 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Vector2D } from '@/types/game';
+import { JOYSTICK_CONFIG } from '@/config/gameConfig';
 
 interface JoystickProps {
   onShoot: (direction: Vector2D, power: number) => void;
@@ -7,13 +8,27 @@ interface JoystickProps {
   playerColor: string;
 }
 
+const { MAX_DISTANCE, MIN_SHOOT_DISTANCE } = JOYSTICK_CONFIG;
+
 export const Joystick: React.FC<JoystickProps> = ({ onShoot, disabled, playerColor }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState<Vector2D>({ x: 0, y: 0 });
-  const [startPos, setStartPos] = useState<Vector2D>({ x: 0, y: 0 });
 
-  const maxDistance = 60;
+  // Use refs to store values needed in event handlers to avoid stale closures
+  const startPosRef = useRef<Vector2D>({ x: 0, y: 0 });
+  const positionRef = useRef<Vector2D>({ x: 0, y: 0 });
+  const onShootRef = useRef(onShoot);
+
+  // Keep ref in sync with prop
+  useEffect(() => {
+    onShootRef.current = onShoot;
+  }, [onShoot]);
+
+  // Keep position ref in sync
+  useEffect(() => {
+    positionRef.current = position;
+  }, [position]);
 
   const getEventPos = (e: React.TouchEvent | React.MouseEvent | TouchEvent | MouseEvent): Vector2D => {
     if ('touches' in e && e.touches.length > 0) {
@@ -29,53 +44,56 @@ export const Joystick: React.FC<JoystickProps> = ({ onShoot, disabled, playerCol
     if (disabled) return;
     e.preventDefault();
     const pos = getEventPos(e);
-    setStartPos(pos);
+    startPosRef.current = pos;
     setIsDragging(true);
     setPosition({ x: 0, y: 0 });
   }, [disabled]);
 
+  // Stable event handlers using refs
   const handleMove = useCallback((e: TouchEvent | MouseEvent) => {
-    if (!isDragging) return;
     e.preventDefault();
-    
+
     const pos = getEventPos(e);
-    let dx = pos.x - startPos.x;
-    let dy = pos.y - startPos.y;
-    
+    let dx = pos.x - startPosRef.current.x;
+    let dy = pos.y - startPosRef.current.y;
+
     const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > maxDistance) {
-      dx = (dx / dist) * maxDistance;
-      dy = (dy / dist) * maxDistance;
+    if (dist > MAX_DISTANCE) {
+      dx = (dx / dist) * MAX_DISTANCE;
+      dy = (dy / dist) * MAX_DISTANCE;
     }
-    
+
     setPosition({ x: dx, y: dy });
-  }, [isDragging, startPos]);
+    positionRef.current = { x: dx, y: dy };
+  }, []);
 
   const handleEnd = useCallback(() => {
-    if (!isDragging) return;
-    
-    const dist = Math.sqrt(position.x * position.x + position.y * position.y);
-    if (dist > 10) {
-      const power = dist / maxDistance;
-      const direction = { 
-        x: position.x / dist, 
-        y: position.y / dist 
+    const pos = positionRef.current;
+    const dist = Math.sqrt(pos.x * pos.x + pos.y * pos.y);
+
+    if (dist > MIN_SHOOT_DISTANCE) {
+      const power = dist / MAX_DISTANCE;
+      const direction = {
+        x: pos.x / dist,
+        y: pos.y / dist
       };
-      onShoot(direction, power);
+      onShootRef.current(direction, power);
     }
-    
+
     setIsDragging(false);
     setPosition({ x: 0, y: 0 });
-  }, [isDragging, position, onShoot]);
+    positionRef.current = { x: 0, y: 0 };
+  }, []);
 
+  // Set up and tear down event listeners
   useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMove);
-      window.addEventListener('mouseup', handleEnd);
-      window.addEventListener('touchmove', handleMove, { passive: false });
-      window.addEventListener('touchend', handleEnd);
-    }
-    
+    if (!isDragging) return;
+
+    window.addEventListener('mousemove', handleMove, { passive: false });
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('touchend', handleEnd);
+
     return () => {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleEnd);
@@ -84,15 +102,15 @@ export const Joystick: React.FC<JoystickProps> = ({ onShoot, disabled, playerCol
     };
   }, [isDragging, handleMove, handleEnd]);
 
-  const power = Math.sqrt(position.x * position.x + position.y * position.y) / maxDistance;
+  const power = Math.sqrt(position.x * position.x + position.y * position.y) / MAX_DISTANCE;
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className={`relative w-36 h-36 rounded-full border-2 flex items-center justify-center select-none touch-none transition-opacity ${
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
       }`}
-      style={{ 
+      style={{
         borderColor: playerColor,
         boxShadow: `0 0 20px ${playerColor}40, inset 0 0 30px ${playerColor}20`,
         background: `radial-gradient(circle, ${playerColor}10 0%, transparent 70%)`,
@@ -103,10 +121,10 @@ export const Joystick: React.FC<JoystickProps> = ({ onShoot, disabled, playerCol
       {/* Direction guide lines */}
       <div className="absolute inset-4 rounded-full border border-muted-foreground/20" />
       <div className="absolute inset-8 rounded-full border border-muted-foreground/10" />
-      
+
       {/* Power indicator */}
       {isDragging && power > 0.1 && (
-        <div 
+        <div
           className="absolute inset-0 rounded-full transition-all"
           style={{
             background: `conic-gradient(${playerColor} ${power * 360}deg, transparent 0deg)`,
@@ -114,7 +132,7 @@ export const Joystick: React.FC<JoystickProps> = ({ onShoot, disabled, playerCol
           }}
         />
       )}
-      
+
       {/* Joystick knob */}
       <div
         className="absolute w-14 h-14 rounded-full transition-transform"
@@ -124,9 +142,9 @@ export const Joystick: React.FC<JoystickProps> = ({ onShoot, disabled, playerCol
           boxShadow: `0 0 30px ${playerColor}, 0 4px 15px rgba(0,0,0,0.5)`,
         }}
       />
-      
+
       {/* Center dot */}
-      <div 
+      <div
         className="absolute w-3 h-3 rounded-full"
         style={{ backgroundColor: playerColor, opacity: 0.5 }}
       />

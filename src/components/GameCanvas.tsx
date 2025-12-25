@@ -1,6 +1,7 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { GameState, Vector2D } from '@/types/game';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { GameState } from '@/types/game';
 import { updateMarblePhysics, processCollisions } from '@/utils/physics';
+import { CANVAS_CONFIG } from '@/config/gameConfig';
 
 interface GameCanvasProps {
   gameState: GameState;
@@ -8,51 +9,128 @@ interface GameCanvasProps {
   onTurnEnd: () => void;
 }
 
-export const GameCanvas: React.FC<GameCanvasProps> = ({ 
-  gameState, 
+export const GameCanvas: React.FC<GameCanvasProps> = ({
+  gameState,
   onGameStateChange,
   onTurnEnd,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollY, setScrollY] = useState(0);
-  const animationRef = useRef<number>();
-  const wasMovingRef = useRef(false);
 
-  // Auto-scroll to follow active marble
+  // Use refs to avoid recreating game loop on every state change
+  const gameStateRef = useRef(gameState);
+  const onGameStateChangeRef = useRef(onGameStateChange);
+  const onTurnEndRef = useRef(onTurnEnd);
+  const animationRef = useRef<number | null>(null);
+  const wasMovingRef = useRef(false);
+  const scrollAnimationRef = useRef<number | null>(null);
+  const targetScrollRef = useRef(0);
+  const prevPlayerRef = useRef(gameState.currentPlayer);
+
+  // Keep refs in sync with props
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
+  useEffect(() => {
+    onGameStateChangeRef.current = onGameStateChange;
+  }, [onGameStateChange]);
+
+  useEffect(() => {
+    onTurnEndRef.current = onTurnEnd;
+  }, [onTurnEnd]);
+
+  // Smooth scroll animation function
+  const animateScrollTo = useCallback((target: number) => {
+    targetScrollRef.current = target;
+
+    const animate = () => {
+      setScrollY(prev => {
+        const diff = targetScrollRef.current - prev;
+        // Use faster easing (0.15) and stop when close enough
+        if (Math.abs(diff) < 1) {
+          return targetScrollRef.current;
+        }
+        return prev + diff * 0.15;
+      });
+      scrollAnimationRef.current = requestAnimationFrame(animate);
+    };
+
+    // Cancel previous animation
+    if (scrollAnimationRef.current) {
+      cancelAnimationFrame(scrollAnimationRef.current);
+    }
+    scrollAnimationRef.current = requestAnimationFrame(animate);
+  }, []);
+
+  // Auto-scroll when player changes (turn switch)
+  useEffect(() => {
+    if (prevPlayerRef.current !== gameState.currentPlayer) {
+      prevPlayerRef.current = gameState.currentPlayer;
+      const activeMarble = gameState.marbles[gameState.currentPlayer];
+      if (activeMarble && containerRef.current) {
+        const containerHeight = containerRef.current.clientHeight;
+        const targetScroll = Math.max(0, Math.min(
+          activeMarble.position.y - containerHeight / 2,
+          gameState.mapHeight - containerHeight
+        ));
+        animateScrollTo(targetScroll);
+      }
+    }
+  }, [gameState.currentPlayer, gameState.marbles, gameState.mapHeight, animateScrollTo]);
+
+  // Auto-scroll to follow moving marble
   useEffect(() => {
     const activeMarble = gameState.marbles[gameState.currentPlayer];
-    if (activeMarble && containerRef.current) {
+    if (activeMarble && activeMarble.isMoving && containerRef.current) {
       const containerHeight = containerRef.current.clientHeight;
       const targetScroll = Math.max(0, Math.min(
         activeMarble.position.y - containerHeight / 2,
         gameState.mapHeight - containerHeight
       ));
-      setScrollY(prev => prev + (targetScroll - prev) * 0.1);
+      setScrollY(prev => prev + (targetScroll - prev) * CANVAS_CONFIG.SCROLL_EASING);
     }
   }, [gameState.marbles, gameState.currentPlayer, gameState.mapHeight]);
 
-  // Game loop
+  // Cleanup scroll animation on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollAnimationRef.current) {
+        cancelAnimationFrame(scrollAnimationRef.current);
+      }
+    };
+  }, []);
+
+  // Game loop - only set up once
   useEffect(() => {
     const gameLoop = () => {
-      let anyMoving = false;
-      let newMarbles = [...gameState.marbles];
+      const state = gameStateRef.current;
 
-      for (let i = 0; i < newMarbles.length; i++) {
-        if (newMarbles[i].isMoving) {
-          newMarbles[i] = updateMarblePhysics(newMarbles[i], gameState.mapWidth, gameState.mapHeight);
-          if (newMarbles[i].isMoving) anyMoving = true;
-        }
+      // Skip if paused or game over
+      if (state.isPaused || state.gameOver) {
+        animationRef.current = requestAnimationFrame(gameLoop);
+        return;
       }
 
+      let anyMoving = false;
+      let newMarbles = state.marbles.map(marble => {
+        if (marble.isMoving) {
+          const updated = updateMarblePhysics(marble, state.mapWidth, state.mapHeight);
+          if (updated.isMoving) anyMoving = true;
+          return updated;
+        }
+        return marble;
+      });
+
       // Process collisions
-      newMarbles = processCollisions(newMarbles, gameState.obstacles, gameState.goal);
+      newMarbles = processCollisions(newMarbles, state.obstacles, state.goal);
 
       // Check if any marble is still moving after collision
       anyMoving = newMarbles.some(m => m.isMoving);
 
       // Check win condition
-      let winner = null;
+      let winner: number | null = null;
       let gameOver = false;
       for (const marble of newMarbles) {
         if (marble.hasFinished) {
@@ -62,16 +140,27 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         }
       }
 
-      onGameStateChange({
-        ...gameState,
-        marbles: newMarbles,
-        winner,
-        gameOver,
-      });
+      // Only update state if something changed
+      const hasChanged =
+        anyMoving !== state.marbles.some(m => m.isMoving) ||
+        newMarbles.some((m, i) =>
+          m.position.x !== state.marbles[i].position.x ||
+          m.position.y !== state.marbles[i].position.y ||
+          m.hasFinished !== state.marbles[i].hasFinished
+        );
+
+      if (hasChanged) {
+        onGameStateChangeRef.current({
+          ...state,
+          marbles: newMarbles,
+          winner,
+          gameOver,
+        });
+      }
 
       // Check if turn ended
       if (wasMovingRef.current && !anyMoving && !gameOver) {
-        onTurnEnd();
+        onTurnEndRef.current();
       }
       wasMovingRef.current = anyMoving;
 
@@ -79,41 +168,50 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     };
 
     animationRef.current = requestAnimationFrame(gameLoop);
+
     return () => {
-      if (animationRef.current) {
+      if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
       }
     };
-  }, [gameState, onGameStateChange, onTurnEnd]);
+  }, []); // Empty dependency array - only run once
 
-  // Render
-  useEffect(() => {
+  // Render function
+  const render = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
     const displayWidth = gameState.mapWidth;
-    const displayHeight = containerRef.current?.clientHeight || 600;
+    const displayHeight = container.clientHeight;
 
-    canvas.width = displayWidth * dpr;
-    canvas.height = displayHeight * dpr;
-    canvas.style.width = `${displayWidth}px`;
-    canvas.style.height = `${displayHeight}px`;
-    ctx.scale(dpr, dpr);
+    // Only resize if needed
+    const targetWidth = displayWidth * dpr;
+    const targetHeight = displayHeight * dpr;
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      canvas.style.width = `${displayWidth}px`;
+      canvas.style.height = `${displayHeight}px`;
+    }
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Clear
-    ctx.fillStyle = 'hsl(240, 15%, 6%)';
+    ctx.fillStyle = CANVAS_CONFIG.BACKGROUND_COLOR;
     ctx.fillRect(0, 0, displayWidth, displayHeight);
 
     // Draw grid
-    ctx.strokeStyle = 'hsla(180, 100%, 50%, 0.1)';
+    ctx.strokeStyle = CANVAS_CONFIG.GRID_COLOR;
     ctx.lineWidth = 1;
-    const gridSize = 50;
+    const gridSize = CANVAS_CONFIG.GRID_SIZE;
     const offsetY = scrollY % gridSize;
-    
+
     for (let x = 0; x <= displayWidth; x += gridSize) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
@@ -228,25 +326,40 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     ctx.restore();
 
+    // Draw pause overlay
+    if (gameState.isPaused) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(0, 0, displayWidth, displayHeight);
+      ctx.fillStyle = 'hsl(180, 100%, 50%)';
+      ctx.font = 'bold 24px Orbitron';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('TẠM DỪNG', displayWidth / 2, displayHeight / 2);
+    }
+
     // Draw scroll indicator
     const indicatorHeight = (displayHeight / gameState.mapHeight) * displayHeight;
     const indicatorY = (scrollY / gameState.mapHeight) * displayHeight;
     ctx.fillStyle = 'hsla(180, 100%, 50%, 0.3)';
     ctx.fillRect(displayWidth - 6, indicatorY, 4, indicatorHeight);
-
   }, [gameState, scrollY]);
 
+  // Render on state change
+  useEffect(() => {
+    render();
+  }, [render]);
+
   return (
-    <div 
+    <div
       ref={containerRef}
       className="relative overflow-hidden rounded-lg border-2 border-primary/50"
-      style={{ 
+      style={{
         height: 'calc(100vh - 280px)',
         minHeight: '400px',
         boxShadow: '0 0 40px hsla(180, 100%, 50%, 0.2), inset 0 0 60px hsla(180, 100%, 50%, 0.05)'
       }}
     >
-      <canvas 
+      <canvas
         ref={canvasRef}
         className="block mx-auto"
       />

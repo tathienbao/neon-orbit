@@ -1,9 +1,9 @@
 import { Vector2D, Marble, Obstacle, Goal } from '@/types/game';
+import { PHYSICS_CONFIG } from '@/config/gameConfig';
 
-const FRICTION = 0.985;
-const MIN_VELOCITY = 0.1;
-const RESTITUTION = 0.8;
+const { FRICTION, MIN_VELOCITY, RESTITUTION } = PHYSICS_CONFIG;
 
+// Vector utilities
 export function magnitude(v: Vector2D): number {
   return Math.sqrt(v.x * v.x + v.y * v.y);
 }
@@ -86,7 +86,7 @@ export function resolveMarbleCollision(m1: Marble, m2: Marble): [Marble, Marble]
   if (overlap <= 0) return [m1, m2];
 
   const normal = normalize(delta);
-  
+
   // Separate marbles
   const separation = scale(normal, overlap / 2);
   const newPos1 = add(m1.position, separation);
@@ -114,7 +114,7 @@ export function checkCircleObstacleCollision(marble: Marble, obstacle: Obstacle)
 
 export function resolveCircleObstacleCollision(marble: Marble, obstacle: Obstacle): Marble {
   if (!obstacle.radius) return marble;
-  
+
   const delta = subtract(marble.position, obstacle.position);
   const dist = magnitude(delta);
   const overlap = marble.radius + obstacle.radius - dist;
@@ -123,7 +123,7 @@ export function resolveCircleObstacleCollision(marble: Marble, obstacle: Obstacl
 
   const normal = normalize(delta);
   const newPos = add(marble.position, scale(normal, overlap));
-  
+
   const velAlongNormal = dot(marble.velocity, normal);
   const newVel = subtract(marble.velocity, scale(normal, 2 * velAlongNormal * RESTITUTION));
 
@@ -159,7 +159,7 @@ export function resolveRectObstacleCollision(marble: Marble, obstacle: Obstacle)
     // Marble center inside rectangle
     const dx = marble.position.x - obstacle.position.x;
     const dy = marble.position.y - obstacle.position.y;
-    
+
     if (Math.abs(dx / halfW) > Math.abs(dy / halfH)) {
       const newX = dx > 0 ? obstacle.position.x + halfW + marble.radius : obstacle.position.x - halfW - marble.radius;
       return { ...marble, position: { ...marble.position, x: newX }, velocity: { x: -marble.velocity.x * RESTITUTION, y: marble.velocity.y }, isMoving: true };
@@ -174,7 +174,7 @@ export function resolveRectObstacleCollision(marble: Marble, obstacle: Obstacle)
 
   const normal = normalize(delta);
   const newPos = add(marble.position, scale(normal, overlap));
-  
+
   const velAlongNormal = dot(marble.velocity, normal);
   const newVel = subtract(marble.velocity, scale(normal, 2 * velAlongNormal * RESTITUTION));
 
@@ -186,12 +186,19 @@ export function checkGoalCollision(marble: Marble, goal: Goal): boolean {
   return dist < goal.radius - marble.radius / 2;
 }
 
+// Refactored to support any number of players
 export function processCollisions(marbles: Marble[], obstacles: Obstacle[], goal: Goal): Marble[] {
-  let result = [...marbles];
+  const result = marbles.map(m => ({ ...m }));
 
-  // Marble-marble collisions
-  if (checkMarbleCollision(result[0], result[1])) {
-    [result[0], result[1]] = resolveMarbleCollision(result[0], result[1]);
+  // Marble-marble collisions (all pairs)
+  for (let i = 0; i < result.length; i++) {
+    for (let j = i + 1; j < result.length; j++) {
+      if (checkMarbleCollision(result[i], result[j])) {
+        const [newM1, newM2] = resolveMarbleCollision(result[i], result[j]);
+        result[i] = newM1;
+        result[j] = newM2;
+      }
+    }
   }
 
   // Marble-obstacle collisions

@@ -14,16 +14,15 @@ export interface Marble {
   hasFinished: boolean;
 }
 
+// Only rectangle and circle are implemented
 export interface Obstacle {
   id: number;
-  type: 'rectangle' | 'circle' | 'triangle';
+  type: 'rectangle' | 'circle';
   position: Vector2D;
   width?: number;
   height?: number;
   radius?: number;
-  rotation?: number;
   color: string;
-  vertices?: Vector2D[];
 }
 
 export interface Goal {
@@ -41,4 +40,5 @@ export interface GameState {
   gameOver: boolean;
   winner: number | null;
   turnCount: number;
+  isPaused: boolean;
 }

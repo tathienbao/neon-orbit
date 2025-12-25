@@ -1,15 +1,15 @@
 import React from 'react';
 import { GameState } from '@/types/game';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, Trophy } from 'lucide-react';
+import { RotateCcw, Trophy, Pause, Play } from 'lucide-react';
 
 interface GameUIProps {
   gameState: GameState;
   onRestart: () => void;
+  onTogglePause: () => void;
 }
 
-export const GameUI: React.FC<GameUIProps> = ({ gameState, onRestart }) => {
-  const currentMarble = gameState.marbles[gameState.currentPlayer];
+export const GameUI: React.FC<GameUIProps> = ({ gameState, onRestart, onTogglePause }) => {
   const isMoving = gameState.marbles.some(m => m.isMoving);
 
   return (
@@ -54,7 +54,27 @@ export const GameUI: React.FC<GameUIProps> = ({ gameState, onRestart }) => {
             {gameState.turnCount}
           </div>
         </div>
-        
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onTogglePause}
+          disabled={gameState.gameOver}
+          className="border-secondary/50 hover:border-secondary hover:bg-secondary/10"
+        >
+          {gameState.isPaused ? (
+            <>
+              <Play className="w-4 h-4 mr-2" />
+              Tiếp tục
+            </>
+          ) : (
+            <>
+              <Pause className="w-4 h-4 mr-2" />
+              Dừng
+            </>
+          )}
+        </Button>
+
         <Button
           variant="outline"
           size="sm"

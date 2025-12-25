@@ -1,12 +1,5 @@
 import { Obstacle, Goal, Marble, GameState } from '@/types/game';
-
-const OBSTACLE_COLORS = [
-  'hsl(180, 100%, 50%)',  // cyan
-  'hsl(300, 100%, 60%)',  // magenta
-  'hsl(120, 100%, 50%)',  // green
-  'hsl(60, 100%, 50%)',   // yellow
-  'hsl(30, 100%, 55%)',   // orange
-];
+import { MAP_CONFIG, OBSTACLE_CONFIG, MARBLE_CONFIG } from '@/config/gameConfig';
 
 function randomInRange(min: number, max: number): number {
   return Math.random() * (max - min) + min;
@@ -14,18 +7,18 @@ function randomInRange(min: number, max: number): number {
 
 function generateObstacles(mapWidth: number, mapHeight: number, count: number): Obstacle[] {
   const obstacles: Obstacle[] = [];
-  const safeZoneStart = 150; // Keep start area clear
-  const safeZoneEnd = mapHeight - 150; // Keep goal area clear
-  
+  const safeZoneStart = MAP_CONFIG.SAFE_ZONE_START;
+  const safeZoneEnd = mapHeight - MAP_CONFIG.SAFE_ZONE_END;
+
   for (let i = 0; i < count; i++) {
-    const type = Math.random() < 0.6 ? 'rectangle' : 'circle';
-    const color = OBSTACLE_COLORS[Math.floor(Math.random() * OBSTACLE_COLORS.length)];
-    
+    const type = Math.random() < OBSTACLE_CONFIG.RECTANGLE_PROBABILITY ? 'rectangle' : 'circle';
+    const color = OBSTACLE_CONFIG.COLORS[Math.floor(Math.random() * OBSTACLE_CONFIG.COLORS.length)];
+
     let obstacle: Obstacle;
-    
+
     if (type === 'rectangle') {
-      const width = randomInRange(40, 120);
-      const height = randomInRange(20, 80);
+      const width = randomInRange(OBSTACLE_CONFIG.RECTANGLE_WIDTH_MIN, OBSTACLE_CONFIG.RECTANGLE_WIDTH_MAX);
+      const height = randomInRange(OBSTACLE_CONFIG.RECTANGLE_HEIGHT_MIN, OBSTACLE_CONFIG.RECTANGLE_HEIGHT_MAX);
       obstacle = {
         id: i,
         type: 'rectangle',
@@ -38,7 +31,7 @@ function generateObstacles(mapWidth: number, mapHeight: number, count: number): 
         color,
       };
     } else {
-      const radius = randomInRange(20, 50);
+      const radius = randomInRange(OBSTACLE_CONFIG.CIRCLE_RADIUS_MIN, OBSTACLE_CONFIG.CIRCLE_RADIUS_MAX);
       obstacle = {
         id: i,
         type: 'circle',
@@ -50,48 +43,52 @@ function generateObstacles(mapWidth: number, mapHeight: number, count: number): 
         color,
       };
     }
-    
+
     obstacles.push(obstacle);
   }
-  
+
   return obstacles;
 }
 
 export function generateMap(screenWidth: number, screenHeight: number): GameState {
-  const mapWidth = Math.min(screenWidth - 40, 400);
-  const mapHeight = screenHeight * 5;
-  
+  // Validate input
+  const validWidth = Math.max(screenWidth, 320);
+  const validHeight = Math.max(screenHeight, 480);
+
+  const mapWidth = Math.min(validWidth - MAP_CONFIG.PADDING, MAP_CONFIG.MAX_WIDTH);
+  const mapHeight = validHeight * MAP_CONFIG.HEIGHT_MULTIPLIER;
+
   const marbles: Marble[] = [
     {
       id: 0,
-      position: { x: mapWidth / 3, y: 80 },
+      position: { x: mapWidth / 3, y: MAP_CONFIG.MARBLE_START_Y },
       velocity: { x: 0, y: 0 },
-      radius: 15,
-      color: 'hsl(180, 100%, 50%)',
-      glowColor: 'rgba(0, 255, 255, 0.8)',
+      radius: MARBLE_CONFIG.RADIUS,
+      color: MARBLE_CONFIG.COLORS.PLAYER_1.color,
+      glowColor: MARBLE_CONFIG.COLORS.PLAYER_1.glowColor,
       isMoving: false,
       hasFinished: false,
     },
     {
       id: 1,
-      position: { x: (mapWidth * 2) / 3, y: 80 },
+      position: { x: (mapWidth * 2) / 3, y: MAP_CONFIG.MARBLE_START_Y },
       velocity: { x: 0, y: 0 },
-      radius: 15,
-      color: 'hsl(300, 100%, 60%)',
-      glowColor: 'rgba(255, 0, 255, 0.8)',
+      radius: MARBLE_CONFIG.RADIUS,
+      color: MARBLE_CONFIG.COLORS.PLAYER_2.color,
+      glowColor: MARBLE_CONFIG.COLORS.PLAYER_2.glowColor,
       isMoving: false,
       hasFinished: false,
     },
   ];
-  
+
   const goal: Goal = {
-    position: { x: mapWidth / 2, y: mapHeight - 80 },
-    radius: 35,
+    position: { x: mapWidth / 2, y: mapHeight - MAP_CONFIG.GOAL_OFFSET_Y },
+    radius: MAP_CONFIG.GOAL_RADIUS,
   };
-  
-  const obstacleCount = Math.floor(mapHeight / 80);
+
+  const obstacleCount = Math.floor(mapHeight / MAP_CONFIG.OBSTACLES_PER_HEIGHT);
   const obstacles = generateObstacles(mapWidth, mapHeight, obstacleCount);
-  
+
   return {
     marbles,
     obstacles,
@@ -102,5 +99,6 @@ export function generateMap(screenWidth: number, screenHeight: number): GameStat
     gameOver: false,
     winner: null,
     turnCount: 0,
+    isPaused: false,
   };
 }
