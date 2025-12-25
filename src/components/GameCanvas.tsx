@@ -80,18 +80,63 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   }, [gameState.currentPlayer, gameState.marbles, gameState.mapHeight, animateScrollTo]);
 
-  // Auto-scroll to follow moving marble
+  // Use ref for smooth camera tracking (avoids re-render jitter)
+  const scrollYRef = useRef(scrollY);
+  const cameraAnimationRef = useRef<number | null>(null);
+
+  // Sync ref with state
   useEffect(() => {
-    const activeMarble = gameState.marbles[gameState.currentPlayer];
-    if (activeMarble && activeMarble.isMoving && containerRef.current) {
-      const containerHeight = containerRef.current.clientHeight;
-      const targetScroll = Math.max(0, Math.min(
-        activeMarble.position.y - containerHeight / 2,
-        gameState.mapHeight - containerHeight
-      ));
-      setScrollY(prev => prev + (targetScroll - prev) * CANVAS_CONFIG.SCROLL_EASING);
-    }
-  }, [gameState.marbles, gameState.currentPlayer, gameState.mapHeight]);
+    scrollYRef.current = scrollY;
+  }, [scrollY]);
+
+  // Camera tracking loop - runs independently at 60fps
+  useEffect(() => {
+    const trackCamera = () => {
+      const container = containerRef.current;
+      if (!container) {
+        cameraAnimationRef.current = requestAnimationFrame(trackCamera);
+        return;
+      }
+
+      // Find any moving marble
+      const movingMarble = gameStateRef.current.marbles.find(m => m.isMoving);
+
+      if (movingMarble) {
+        const containerHeight = container.clientHeight;
+        const currentScroll = scrollYRef.current;
+
+        // Calculate target scroll to center marble
+        const targetScroll = Math.max(0, Math.min(
+          movingMarble.position.y - containerHeight / 2,
+          gameStateRef.current.mapHeight - containerHeight
+        ));
+
+        // Calculate distance from target
+        const distance = Math.abs(targetScroll - currentScroll);
+
+        // Adaptive easing: faster when further away
+        // Base: 0.1, Max: 0.4 when very far
+        const easing = Math.min(0.4, 0.1 + distance / containerHeight * 0.2);
+
+        const newScroll = currentScroll + (targetScroll - currentScroll) * easing;
+
+        // Only update state if change is significant (reduces re-renders)
+        if (Math.abs(newScroll - currentScroll) > 0.5) {
+          setScrollY(newScroll);
+        }
+      }
+
+      cameraAnimationRef.current = requestAnimationFrame(trackCamera);
+    };
+
+    cameraAnimationRef.current = requestAnimationFrame(trackCamera);
+
+    return () => {
+      if (cameraAnimationRef.current) {
+        cancelAnimationFrame(cameraAnimationRef.current);
+      }
+    };
+  }, []); // Empty deps - runs once, uses refs for current values
 
   // Cleanup scroll animation on unmount
   useEffect(() => {
