@@ -4,6 +4,38 @@ Nhật ký phát triển dự án game Neon Marble.
 
 ---
 
+## 2025-12-25 (Đêm)
+
+### Entity Interpolation - Fix Ghost Effect
+
+**Vấn đề:**
+- Player 2 (Guest) thấy bi "nhảy lùi" khi opponent bắn
+- Nguyên nhân: Guest chạy physics độc lập, nhận state cũ từ Host (do network latency)
+- Khi ghi đè state → bi nhảy từ vị trí mới về vị trí cũ → ghost effect
+
+**Giải pháp: Entity Interpolation**
+- Guest buffer các state nhận được (với timestamp)
+- Render "trong quá khứ" 100ms để luôn có 2 states để interpolate
+- Lerp mượt mà giữa các states thay vì ghi đè trực tiếp
+
+**Implementation:**
+- Tạo `src/utils/interpolation.ts` - State buffer và lerp functions
+- Thêm timestamp vào game-state-update messages
+- Guest dùng interpolation loop thay vì physics loop khi opponent's turn
+- GameCanvas skip physics khi Guest + opponent's turn
+
+**Files thay đổi:**
+- `src/utils/interpolation.ts` (MỚI)
+- `src/hooks/useMultiplayer.ts` - Thêm timestamp
+- `src/components/OnlineMarbleGame.tsx` - Interpolation logic
+- `src/components/GameCanvas.tsx` - Skip physics cho Guest
+
+**Kết quả:**
+- Animation mượt mà ngay cả với latency 100-200ms
+- Không còn ghost effect
+
+---
+
 ## 2025-12-25 (Tối)
 
 ### Cloudflare Workers Backend
