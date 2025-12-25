@@ -33,7 +33,11 @@ Nhật ký phát triển dự án game Neon Marble.
 **Trạng thái:**
 - ✅ Worker chạy local với Wrangler dev
 - ✅ Frontend dùng native WebSocket
-- ⏳ Chưa deploy lên production
+- ✅ Deployed lên production
+
+**Production URLs:**
+- Frontend: https://neon-marble.pages.dev
+- Backend: https://neon-marble-api.tathienbao-ttb.workers.dev
 
 ---
 
