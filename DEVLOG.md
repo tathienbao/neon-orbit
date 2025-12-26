@@ -4,6 +4,57 @@ Nhật ký phát triển dự án game Neon Marble.
 
 ---
 
+## 2025-12-26
+
+### Camera Panning - Boundary Zone + Hysteresis
+
+**Vấn đề ban đầu:**
+- Camera dùng easing-only → chậm lại khi gần target
+- Bi bay nhanh ra khỏi viewport → camera không theo kịp
+- Thử approach phức tạp (directional offset, delayed turn end) → gây bugs về logic đổi lượt
+
+**Ý tưởng của user (sáng tạo!):**
+
+> "Ước chừng viewport thành 4 phần theo chiều dọc, 2 phần giữa là khung giới hạn (safe zone).
+> Camera pan như cũ, nhưng nếu bi chạm vào boundary thì camera phải chạy theo với tốc độ cao nhất."
+
+**Implementation:**
+
+1. **Boundary Zone Detection:**
+   - Viewport chia 4 phần: `[boundary 25%][safe 25%][safe 25%][boundary 25%]`
+   - Bi ở safe zone → camera pan smooth (easing 0.1)
+   - Bi chạm boundary → camera follow nhanh (easing 0.5)
+
+2. **Debug Visualization:**
+   - Nhấn phím **C** để toggle khung cam màu cam
+   - Hiển thị boundary lines để kiểm chứng
+
+3. **Jitter Fix với Hysteresis:**
+   - Vấn đề: Camera nhảy nhanh → bi "về" safe → camera chậm → bi "ra" boundary → oscillation
+   - Giải pháp: Khi vào fast mode, **giữ fast mode** cho đến khi camera bắt kịp (distance < 50px)
+
+**Config (`CAMERA_CONFIG`):**
+```typescript
+BOUNDARY_RATIO: 0.25,        // 25% top/bottom là boundary
+NORMAL_EASING: 0.1,          // Smooth pan trong safe zone
+FAST_EASING: 0.5,            // Fast follow trong boundary
+FAST_FOLLOW_MIN_VELOCITY: 5, // Chỉ fast follow khi bi chạy nhanh
+```
+
+**Files thay đổi:**
+- `src/config/gameConfig.ts` - Thêm CAMERA_CONFIG
+- `src/components/GameCanvas.tsx` - Boundary detection, hysteresis, debug frame
+
+**Kết quả:**
+- ✅ Camera theo kịp bi khi bay nhanh
+- ✅ Smooth pan khi bi di chuyển chậm trong safe zone
+- ✅ Không còn jitter nhờ hysteresis
+- ✅ Logic đổi lượt không bị ảnh hưởng (giữ nguyên code cũ)
+
+**Docs:** `docs/CAMERA-BOUNDARY-ZONE.md` - Chi tiết implementation
+
+---
+
 ## 2025-12-25 (Đêm)
 
 ### Buffered Playback - Fix Ghost Effect

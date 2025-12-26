@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GameState } from '@/types/game';
 import { updateMarblePhysics, processCollisions } from '@/utils/physics';
-import { CANVAS_CONFIG } from '@/config/gameConfig';
+import { CANVAS_CONFIG, CAMERA_CONFIG } from '@/config/gameConfig';
 
 interface GameCanvasProps {
   gameState: GameState;
@@ -21,6 +21,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollY, setScrollY] = useState(0);
+  const [showDebugBoundary, setShowDebugBoundary] = useState(false);
 
   // Use refs to avoid recreating game loop on every state change
   const gameStateRef = useRef(gameState);
@@ -97,11 +98,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   // Use ref for smooth camera tracking (avoids re-render jitter)
   const scrollYRef = useRef(scrollY);
   const cameraAnimationRef = useRef<number | null>(null);
+  const showDebugBoundaryRef = useRef(showDebugBoundary);
+  const fastModeRef = useRef(false); // Hysteresis: stay in fast mode until caught up
 
-  // Sync ref with state
+  // Sync refs with state
   useEffect(() => {
     scrollYRef.current = scrollY;
   }, [scrollY]);
+
+  useEffect(() => {
+    showDebugBoundaryRef.current = showDebugBoundary;
+  }, [showDebugBoundary]);
 
   // Camera tracking loop - runs independently at 60fps
   useEffect(() => {
@@ -119,23 +126,65 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         const containerHeight = container.clientHeight;
         const currentScroll = scrollYRef.current;
 
+        // Calculate marble's position relative to viewport
+        const marbleScreenY = movingMarble.position.y - currentScroll;
+
+        // Boundary zones: top 25% and bottom 25% of viewport
+        const boundarySize = containerHeight * CAMERA_CONFIG.BOUNDARY_RATIO;
+        const topBoundary = boundarySize;
+        const bottomBoundary = containerHeight - boundarySize;
+
+        // Check if marble is in boundary zone (outside safe middle area)
+        const inBoundaryZone = marbleScreenY < topBoundary || marbleScreenY > bottomBoundary;
+
+        // Calculate marble's speed (velocity magnitude)
+        const marbleSpeed = Math.sqrt(
+          movingMarble.velocity.x ** 2 + movingMarble.velocity.y ** 2
+        );
+        const isMovingFast = marbleSpeed > CAMERA_CONFIG.FAST_FOLLOW_MIN_VELOCITY;
+
         // Calculate target scroll to center marble
         const targetScroll = Math.max(0, Math.min(
           movingMarble.position.y - containerHeight / 2,
           gameStateRef.current.mapHeight - containerHeight
         ));
 
-        // Calculate distance from target
         const distance = Math.abs(targetScroll - currentScroll);
 
-        // Adaptive easing: faster when further away
-        // Base: 0.1, Max: 0.4 when very far
-        const easing = Math.min(0.4, 0.1 + distance / containerHeight * 0.2);
+        // Hysteresis logic to prevent oscillation:
+        // - Enter fast mode when in boundary AND moving fast
+        // - Stay in fast mode until camera catches up (distance < 50px)
+        if (inBoundaryZone && isMovingFast) {
+          fastModeRef.current = true;
+        } else if (distance < 50) {
+          // Camera caught up, exit fast mode
+          fastModeRef.current = false;
+        }
+
+        // Use fast easing if in fast mode, otherwise normal
+        let easing: number;
+        if (fastModeRef.current) {
+          easing = CAMERA_CONFIG.FAST_EASING;
+        } else {
+          easing = Math.min(0.4, CAMERA_CONFIG.NORMAL_EASING + distance / containerHeight * 0.2);
+        }
 
         const newScroll = currentScroll + (targetScroll - currentScroll) * easing;
+        const delta = newScroll - currentScroll;
+
+        // Debug log when boundary debug is enabled
+        if (showDebugBoundaryRef.current && Math.abs(delta) > 0.1) {
+          console.log(
+            `[Camera] speed:${marbleSpeed.toFixed(1)} | ` +
+            `zone:${inBoundaryZone ? 'BOUNDARY' : 'safe'} | ` +
+            `mode:${fastModeRef.current ? 'FAST' : 'normal'} | ` +
+            `dist:${distance.toFixed(0)} | ` +
+            `delta:${delta.toFixed(1)}`
+          );
+        }
 
         // Only update state if change is significant (reduces re-renders)
-        if (Math.abs(newScroll - currentScroll) > 0.5) {
+        if (Math.abs(delta) > 0.5) {
           setScrollY(newScroll);
         }
       }
@@ -159,6 +208,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         cancelAnimationFrame(scrollAnimationRef.current);
       }
     };
+  }, []);
+
+  // Toggle debug boundary with 'C' key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'c' || e.key === 'C') {
+        setShowDebugBoundary(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Game loop - only set up once
@@ -409,7 +469,38 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const indicatorY = (scrollY / gameState.mapHeight) * displayHeight;
     ctx.fillStyle = 'hsla(180, 100%, 50%, 0.3)';
     ctx.fillRect(displayWidth - 6, indicatorY, 4, indicatorHeight);
-  }, [gameState, scrollY]);
+
+    // Draw debug boundary frame (toggle with C key)
+    if (showDebugBoundary) {
+      const boundarySize = displayHeight * CAMERA_CONFIG.BOUNDARY_RATIO;
+
+      ctx.strokeStyle = 'hsla(30, 100%, 50%, 0.8)'; // Orange
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 5]);
+
+      // Top boundary line
+      ctx.beginPath();
+      ctx.moveTo(0, boundarySize);
+      ctx.lineTo(displayWidth, boundarySize);
+      ctx.stroke();
+
+      // Bottom boundary line
+      ctx.beginPath();
+      ctx.moveTo(0, displayHeight - boundarySize);
+      ctx.lineTo(displayWidth, displayHeight - boundarySize);
+      ctx.stroke();
+
+      ctx.setLineDash([]); // Reset
+
+      // Label
+      ctx.fillStyle = 'hsla(30, 100%, 50%, 0.8)';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('BOUNDARY ZONE', 5, 5);
+      ctx.fillText('(fast camera)', 5, 17);
+    }
+  }, [gameState, scrollY, showDebugBoundary]);
 
   // Render on state change
   useEffect(() => {

@@ -93,3 +93,15 @@ export const UI_CONFIG = {
   // Toast duration in ms
   TOAST_DURATION: 2000,
 } as const;
+
+export const CAMERA_CONFIG = {
+  // Boundary zone: middle 50% of viewport is safe, outer 25% triggers fast follow
+  // Viewport divided into 4 parts: [boundary][safe][safe][boundary]
+  BOUNDARY_RATIO: 0.25, // Top/bottom 25% is boundary zone
+  // Normal easing for smooth camera
+  NORMAL_EASING: 0.1,
+  // Fast follow: camera matches marble speed when in boundary zone
+  FAST_EASING: 0.5, // Fast but not instant to reduce jitter
+  // Minimum velocity to trigger fast follow (prevents jitter when marble slows down)
+  FAST_FOLLOW_MIN_VELOCITY: 5,
+} as const;
