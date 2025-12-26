@@ -1,0 +1,24 @@
+{
+  "name": "Neon Marble",
+  "short_name": "NeonMarble",
+  "description": "Game bắn bi phong cách neon cyberpunk",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#00ffff",
+  "background_color": "#0a0a14",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
