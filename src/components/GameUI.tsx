@@ -49,7 +49,7 @@ export const GameUI: React.FC<GameUIProps> = ({ gameState, onRestart, onTogglePa
       {/* Game info */}
       <div className="flex items-center gap-4">
         <div className="text-center">
-          <div className="text-xs text-muted-foreground uppercase tracking-wider">Lượt</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wider">Turn</div>
           <div className="font-display text-xl font-bold text-primary neon-text">
             {gameState.turnCount}
           </div>
@@ -65,12 +65,12 @@ export const GameUI: React.FC<GameUIProps> = ({ gameState, onRestart, onTogglePa
           {gameState.isPaused ? (
             <>
               <Play className="w-4 h-4 mr-2" />
-              Tiếp tục
+              Resume
             </>
           ) : (
             <>
               <Pause className="w-4 h-4 mr-2" />
-              Dừng
+              Pause
             </>
           )}
         </Button>
@@ -82,7 +82,7 @@ export const GameUI: React.FC<GameUIProps> = ({ gameState, onRestart, onTogglePa
           className="border-primary/50 hover:border-primary hover:bg-primary/10"
         >
           <RotateCcw className="w-4 h-4 mr-2" />
-          Chơi lại
+          Restart
         </Button>
       </div>
     </div>

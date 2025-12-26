@@ -9,6 +9,7 @@ interface GameCanvasProps {
   onTurnEnd: () => void;
   isHost?: boolean;        // For online mode - undefined means local mode
   myPlayerIndex?: number;  // For online mode
+  fillHeight?: boolean;    // Use 100% height instead of fixed calc
 }
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({
@@ -17,6 +18,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onTurnEnd,
   isHost,
   myPlayerIndex,
+  fillHeight = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -512,8 +514,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       ref={containerRef}
       className="relative overflow-hidden rounded-lg border-2 border-primary/50"
       style={{
-        height: 'calc(100vh - 280px)',
-        minHeight: '400px',
+        height: fillHeight ? '100%' : 'calc(100vh - 280px)',
+        minHeight: fillHeight ? undefined : '400px',
         boxShadow: '0 0 40px hsla(180, 100%, 50%, 0.2), inset 0 0 60px hsla(180, 100%, 50%, 0.05)'
       }}
     >

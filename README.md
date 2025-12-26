@@ -1,28 +1,28 @@
 # Neon Marble
 
-Game bắn bi 2 người chơi với phong cách neon cyberpunk. Hỗ trợ chơi local (cùng máy) và online (khác thiết bị qua mạng LAN/WiFi).
+A 2-player marble shooting game with neon cyberpunk aesthetics. Supports local play (same device) and online multiplayer (different devices via LAN/WiFi or internet).
 
-## Screenshots
+## Features
 
-![Game Screenshot](docs/screenshot.png)
-
-## Tính năng
-
-- **2 chế độ chơi:**
-  - **Local**: 2 người chơi luân phiên trên cùng 1 thiết bị
-  - **Online**: 2 thiết bị khác nhau qua mạng LAN/WiFi
+- **2 Game Modes:**
+  - **Local**: 2 players take turns on the same device
+  - **Online**: 2 different devices via network
 
 - **Gameplay:**
-  - Điều khiển bằng joystick (kéo để ngắm, thả để bắn)
-  - Vật lý thực tế: va chạm, ma sát, phản xạ
-  - Map ngẫu nhiên với obstacles
-  - Ai đưa bi vào lỗ xanh trước thắng
+  - Joystick control (drag to aim, release to shoot)
+  - Realistic physics: collisions, friction, bouncing
+  - Random map with obstacles
+  - First player to get their marble in the goal wins
 
-- **Tính năng khác:**
-  - Pause/Resume (nhấn ESC hoặc P)
-  - Camera tự động theo dõi bi
-  - Hiệu ứng neon đẹp mắt
-  - Responsive trên mobile và desktop
+- **Mobile Optimized:**
+  - Responsive layout with 5:3 joystick area
+  - PWA installable (Add to Home Screen)
+  - Touch-friendly controls
+
+- **Smart Camera:**
+  - Boundary zone detection for smooth tracking
+  - Fast follow when marble approaches viewport edge
+  - Hysteresis to prevent jitter
 
 ## Tech Stack
 
@@ -31,34 +31,39 @@ Game bắn bi 2 người chơi với phong cách neon cyberpunk. Hỗ trợ chơ
 - **Backend (Local Dev):** Wrangler (local Cloudflare simulator)
 - **Rendering:** HTML5 Canvas
 
-## Cài đặt
+## Installation
 
 ```bash
 # Clone repo
 git clone https://github.com/tathienbao/neon-orbit.git
 cd neon-orbit
 
-# Cài dependencies (frontend + worker)
+# Install dependencies (frontend + worker)
 npm install
 npm run worker:install
 
-# Chạy development
-npm run dev          # Chỉ frontend (local mode)
-npm run server       # Backend với Wrangler (online mode)
-npm run dev:all      # Cả frontend + backend
+# Run development
+npm run dev          # Frontend only (local mode)
+npm run server       # Backend with Wrangler (online mode)
+npm run dev:all      # Both frontend + backend
 ```
 
-## Chơi Online (2 thiết bị khác nhau)
+## Playing Online (2 different devices)
 
-1. Chạy server: `npm run server`
-2. Chạy frontend: `npm run dev`
-3. **Thiết bị 1**: Mở `http://localhost:8080` → Tạo phòng → Copy mã phòng
-4. **Thiết bị 2**: Mở `http://<IP-máy-chủ>:8080` → Vào phòng → Nhập mã
-5. Cả 2 nhấn "Sẵn sàng" → Game bắt đầu!
+1. Run server: `npm run server`
+2. Run frontend: `npm run dev`
+3. **Device 1**: Open `http://localhost:8080` → Create room → Copy room code
+4. **Device 2**: Open `http://<host-ip>:8080` → Join room → Enter code
+5. Both click "Ready" → Game starts!
 
-**Lưu ý:** Cả 2 thiết bị phải cùng mạng WiFi/LAN.
+**Note:** Both devices must be on the same WiFi/LAN network for local development.
 
-## Cấu trúc dự án
+## Production
+
+- **Frontend**: https://neon-marble.pages.dev
+- **Backend**: https://neon-marble-api.tathienbao-ttb.workers.dev
+
+## Project Structure
 
 ```
 neon-orbit/
@@ -68,38 +73,48 @@ neon-orbit/
 │   │   └── game-room.ts     # Durable Object
 │   ├── wrangler.toml        # Cloudflare config
 │   └── package.json
-├── server/
-│   └── index.js             # Legacy Socket.io server
 ├── src/
 │   ├── components/          # React components
-│   │   ├── GameCanvas.tsx
-│   │   ├── Joystick.tsx
-│   │   ├── LobbyScreen.tsx
+│   │   ├── GameCanvas.tsx   # Canvas rendering + physics
+│   │   ├── Joystick.tsx     # Touch/mouse input
+│   │   ├── LobbyScreen.tsx  # Room creation/joining
 │   │   └── ...
 │   ├── config/
-│   │   └── gameConfig.ts    # Cấu hình game tập trung
+│   │   └── gameConfig.ts    # Centralized game config
 │   ├── hooks/
 │   │   └── useMultiplayer.ts
 │   ├── types/
 │   │   └── game.ts
 │   └── utils/
-│       ├── physics.ts       # Engine vật lý
+│       ├── physics.ts       # Physics engine
 │       └── mapGenerator.ts
+├── public/
+│   ├── logo.svg            # PWA logo
+│   ├── favicon.svg         # Browser favicon
+│   └── manifest.json       # PWA manifest
 ├── docs/
-│   └── DEPLOYMENT.md        # Hướng dẫn deploy
+│   ├── DEPLOYMENT.md       # Deployment guide
+│   ├── CAMERA-BOUNDARY-ZONE.md
+│   └── ...
+├── DEVLOG.md               # Development log
 └── package.json
 ```
 
 ## Scripts
 
-| Script | Mô tả |
-|--------|-------|
-| `npm run dev` | Chạy frontend dev server |
-| `npm run server` | Chạy Wrangler dev server |
-| `npm run dev:all` | Chạy cả frontend + backend |
-| `npm run build` | Build production |
-| `npm run worker:install` | Cài dependencies cho worker |
-| `npm run worker:deploy` | Deploy worker lên Cloudflare |
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Run frontend dev server |
+| `npm run server` | Run Wrangler dev server |
+| `npm run dev:all` | Run both frontend + backend |
+| `npm run build` | Build for production |
+| `npm run worker:install` | Install worker dependencies |
+| `npm run worker:deploy` | Deploy worker to Cloudflare |
+
+## Keyboard Shortcuts
+
+- **ESC** or **P**: Pause/Resume game
+- **C**: Toggle camera debug visualization (boundary zones)
 
 ## License
 

@@ -7,23 +7,33 @@ import { GameUI } from './GameUI';
 import { WinnerModal } from './WinnerModal';
 import { ErrorBoundary } from './ErrorBoundary';
 import { toast } from 'sonner';
-import { PHYSICS_CONFIG, UI_CONFIG } from '@/config/gameConfig';
+import { PHYSICS_CONFIG, UI_CONFIG, LAYOUT_CONFIG } from '@/config/gameConfig';
 
 const { SHOOT_POWER_MULTIPLIER } = PHYSICS_CONFIG;
 
 const NeonMarbleGameInner: React.FC = () => {
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < LAYOUT_CONFIG.MOBILE_BREAKPOINT);
+
+  // Detect mobile/desktop
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < LAYOUT_CONFIG.MOBILE_BREAKPOINT);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const initGame = useCallback(() => {
     try {
       const newState = generateMap(window.innerWidth, window.innerHeight);
       setGameState(newState);
-      toast.success('Map mới đã được tạo!', {
-        description: 'Người chơi 1 bắt đầu trước',
+      toast.success('New map generated!', {
+        description: 'Player 1 goes first',
       });
     } catch (error) {
       console.error('Failed to initialize game:', error);
-      toast.error('Không thể khởi tạo game');
+      toast.error('Failed to initialize game');
     }
   }, []);
 
@@ -47,7 +57,7 @@ const NeonMarbleGameInner: React.FC = () => {
     setGameState(prev => {
       if (!prev || prev.gameOver) return prev;
       const newPaused = !prev.isPaused;
-      toast.info(newPaused ? 'Game tạm dừng' : 'Tiếp tục chơi', {
+      toast.info(newPaused ? 'Game paused' : 'Game resumed', {
         duration: UI_CONFIG.TOAST_DURATION,
       });
       return { ...prev, isPaused: newPaused };
@@ -94,7 +104,7 @@ const NeonMarbleGameInner: React.FC = () => {
       currentPlayer: nextPlayer,
     } : null);
 
-    toast.info(`Lượt của Người chơi ${nextPlayer + 1}`, {
+    toast.info(`Player ${nextPlayer + 1}'s turn`, {
       duration: UI_CONFIG.TOAST_DURATION,
     });
   }, [gameState]);
@@ -107,7 +117,7 @@ const NeonMarbleGameInner: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="font-display text-2xl text-primary neon-text animate-pulse">
-          Đang tải...
+          Loading...
         </div>
       </div>
     );
@@ -117,6 +127,69 @@ const NeonMarbleGameInner: React.FC = () => {
   const isAnyMoving = gameState.marbles.some(m => m.isMoving);
   const canShoot = !isAnyMoving && !gameState.gameOver && !currentMarble.hasFinished && !gameState.isPaused;
 
+  // Mobile layout: map area + joystick area (5:3 ratio)
+  // Joystick area: width = screen width, height = width * 3/5
+  const screenWidth = window.innerWidth;
+  const screenHeight = window.innerHeight;
+  const joystickAreaHeight = screenWidth * (3 / 5);
+  const mapAreaHeight = screenHeight - joystickAreaHeight;
+
+  if (isMobile) {
+    return (
+      <div className="fixed inset-0 bg-background flex flex-col">
+        {/* Map area - takes remaining height after joystick */}
+        <div
+          className="relative overflow-hidden p-2"
+          style={{ height: mapAreaHeight }}
+        >
+          <GameCanvas
+            gameState={gameState}
+            onGameStateChange={handleGameStateChange}
+            onTurnEnd={handleTurnEnd}
+            fillHeight
+          />
+
+          {/* Top overlay - minimal UI */}
+          <div className="absolute top-0 left-0 right-0 p-2 flex justify-between items-start z-10 pointer-events-none">
+            <div className="pointer-events-auto">
+              <GameUI
+                gameState={gameState}
+                onRestart={initGame}
+                onTogglePause={handleTogglePause}
+              />
+            </div>
+            <div
+              className="font-display text-sm font-bold px-2 py-1 rounded bg-background/80"
+              style={{
+                color: currentMarble.color,
+                textShadow: `0 0 10px ${currentMarble.glowColor}`,
+              }}
+            >
+              P{gameState.currentPlayer + 1}
+            </div>
+          </div>
+        </div>
+
+        {/* Joystick area - fixed 4:3 ratio */}
+        <div
+          className="flex items-center justify-center"
+          style={{ height: joystickAreaHeight }}
+        >
+          <Joystick
+            onShoot={handleShoot}
+            disabled={!canShoot}
+            playerColor={currentMarble.color}
+            compact
+          />
+        </div>
+
+        {/* Winner Modal */}
+        <WinnerModal gameState={gameState} onRestart={initGame} />
+      </div>
+    );
+  }
+
+  // Desktop layout: side-by-side
   return (
     <div className="min-h-screen flex flex-col p-4 gap-4">
       {/* Header */}
@@ -125,7 +198,7 @@ const NeonMarbleGameInner: React.FC = () => {
           NEON MARBLE
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Bắn bi vào lỗ để chiến thắng! (Nhấn ESC hoặc P để tạm dừng)
+          Shoot the marble into the hole to win! (Press ESC or P to pause)
         </p>
       </header>
 
@@ -136,10 +209,10 @@ const NeonMarbleGameInner: React.FC = () => {
         onTogglePause={handleTogglePause}
       />
 
-      {/* Game area */}
-      <div className="flex-1 flex flex-col md:flex-row gap-4 items-center justify-center">
+      {/* Game area - desktop */}
+      <div className="flex-1 flex flex-row gap-4 items-center justify-center">
         {/* Canvas */}
-        <div className="flex-1 w-full max-w-md">
+        <div className="flex-1 max-w-lg">
           <GameCanvas
             gameState={gameState}
             onGameStateChange={handleGameStateChange}
@@ -151,7 +224,7 @@ const NeonMarbleGameInner: React.FC = () => {
         <div className="flex flex-col items-center gap-4">
           <div className="text-center mb-2">
             <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-              {gameState.isPaused ? 'Tạm dừng' : isAnyMoving ? 'Đang di chuyển...' : 'Kéo để bắn'}
+              {gameState.isPaused ? 'Paused' : isAnyMoving ? 'Moving...' : 'Drag to shoot'}
             </div>
             <div
               className="font-display text-lg font-bold"
@@ -160,7 +233,7 @@ const NeonMarbleGameInner: React.FC = () => {
                 textShadow: `0 0 10px ${currentMarble.glowColor}`,
               }}
             >
-              Người chơi {gameState.currentPlayer + 1}
+              Player {gameState.currentPlayer + 1}
             </div>
           </div>
 
@@ -171,7 +244,7 @@ const NeonMarbleGameInner: React.FC = () => {
           />
 
           <p className="text-xs text-muted-foreground text-center max-w-[150px]">
-            Kéo núm theo hướng muốn bắn. Kéo xa = mạnh hơn
+            Drag in the direction to shoot. Drag further = more power
           </p>
         </div>
       </div>

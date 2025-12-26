@@ -251,7 +251,7 @@ export function useMultiplayer(): UseMultiplayerReturn {
 
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
-      setState(prev => ({ ...prev, error: 'Không thể kết nối server' }));
+      setState(prev => ({ ...prev, error: 'Failed to connect to server' }));
     };
 
     wsRef.current = ws;
@@ -287,7 +287,7 @@ export function useMultiplayer(): UseMultiplayerReturn {
 
         setTimeout(() => {
           clearInterval(checkConnection);
-          reject(new Error('Không thể kết nối server'));
+          reject(new Error('Failed to connect to server'));
         }, 5000);
 
         return;
@@ -315,7 +315,7 @@ export function useMultiplayer(): UseMultiplayerReturn {
             }));
             resolve(roomInfo);
           } else {
-            reject(new Error((msg.error as string) || 'Không thể tạo phòng'));
+            reject(new Error((msg.error as string) || 'Failed to create room'));
           }
         });
 
@@ -356,7 +356,7 @@ export function useMultiplayer(): UseMultiplayerReturn {
               }));
               resolve(roomInfo);
             } else {
-              reject(new Error((msg.error as string) || 'Không thể vào phòng'));
+              reject(new Error((msg.error as string) || 'Failed to join room'));
             }
           });
 
@@ -366,7 +366,7 @@ export function useMultiplayer(): UseMultiplayerReturn {
 
       setTimeout(() => {
         clearInterval(checkConnection);
-        reject(new Error('Không thể kết nối server'));
+        reject(new Error('Failed to connect to server'));
       }, 5000);
     });
   }, [connect, send]);

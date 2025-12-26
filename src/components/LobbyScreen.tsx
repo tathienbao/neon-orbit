@@ -34,7 +34,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
 
   const handleCreateRoom = async () => {
     if (!playerName.trim()) {
-      toast.error('Vui lòng nhập tên của bạn');
+      toast.error('Please enter your name');
       return;
     }
 
@@ -42,9 +42,9 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
     try {
       await multiplayer.createRoom(playerName.trim());
       setMode('waiting');
-      toast.success('Đã tạo phòng!');
+      toast.success('Room created!');
     } catch (error: any) {
-      toast.error(error.message || 'Không thể tạo phòng');
+      toast.error(error.message || 'Failed to create room');
     } finally {
       setIsLoading(false);
     }
@@ -52,11 +52,11 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
 
   const handleJoinRoom = async () => {
     if (!playerName.trim()) {
-      toast.error('Vui lòng nhập tên của bạn');
+      toast.error('Please enter your name');
       return;
     }
     if (!roomCode.trim()) {
-      toast.error('Vui lòng nhập mã phòng');
+      toast.error('Please enter room code');
       return;
     }
 
@@ -64,9 +64,9 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
     try {
       await multiplayer.joinRoom(roomCode.trim().toUpperCase(), playerName.trim());
       setMode('waiting');
-      toast.success('Đã vào phòng!');
+      toast.success('Joined room!');
     } catch (error: any) {
-      toast.error(error.message || 'Không thể vào phòng');
+      toast.error(error.message || 'Failed to join room');
     } finally {
       setIsLoading(false);
     }
@@ -76,14 +76,14 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
     if (multiplayer.roomInfo?.roomCode) {
       navigator.clipboard.writeText(multiplayer.roomInfo.roomCode);
       setCopied(true);
-      toast.success('Đã copy mã phòng!');
+      toast.success('Room code copied!');
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
   const handleReady = () => {
     multiplayer.setReady();
-    toast.info('Đã sẵn sàng!');
+    toast.info('Ready!');
   };
 
   // Game starts automatically when both ready (handled by parent via useEffect)
@@ -108,7 +108,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
           NEON MARBLE
         </h1>
         <p className="text-muted-foreground">
-          Game bắn bi 2 người chơi
+          2-player marble shooting game
         </p>
       </header>
 
@@ -117,12 +117,12 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
         {multiplayer.isConnected ? (
           <>
             <Wifi className="w-4 h-4 text-green-500" />
-            <span className="text-green-500">Đã kết nối server</span>
+            <span className="text-green-500">Connected to server</span>
           </>
         ) : (
           <>
             <WifiOff className="w-4 h-4 text-red-500" />
-            <span className="text-red-500">Đang kết nối...</span>
+            <span className="text-red-500">Connecting...</span>
           </>
         )}
       </div>
@@ -137,7 +137,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
               variant="outline"
             >
               <Users className="w-5 h-5 mr-2" />
-              Chơi Local (Cùng máy)
+              Play Local (Same device)
             </Button>
 
             <div className="relative">
@@ -145,7 +145,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
                 <span className="w-full border-t border-muted" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">hoặc</span>
+                <span className="bg-background px-2 text-muted-foreground">or</span>
               </div>
             </div>
 
@@ -154,7 +154,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
               className="w-full h-14 text-lg font-display bg-primary hover:bg-primary/90"
               disabled={!multiplayer.isConnected}
             >
-              Tạo phòng Online
+              Create Online Room
             </Button>
 
             <Button
@@ -162,7 +162,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
               className="w-full h-14 text-lg font-display bg-secondary hover:bg-secondary/90"
               disabled={!multiplayer.isConnected}
             >
-              Vào phòng Online
+              Join Online Room
             </Button>
           </div>
         )}
@@ -170,14 +170,14 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
         {/* Create Room */}
         {mode === 'create' && (
           <div className="space-y-4">
-            <h2 className="font-display text-xl text-center mb-4">Tạo phòng mới</h2>
+            <h2 className="font-display text-xl text-center mb-4">Create New Room</h2>
 
             <div>
-              <label className="text-sm text-muted-foreground">Tên của bạn</label>
+              <label className="text-sm text-muted-foreground">Your Name</label>
               <Input
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
-                placeholder="Nhập tên..."
+                placeholder="Enter name..."
                 className="mt-1"
                 maxLength={20}
               />
@@ -189,14 +189,14 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
                 onClick={() => setMode('menu')}
                 className="flex-1"
               >
-                Quay lại
+                Back
               </Button>
               <Button
                 onClick={handleCreateRoom}
                 className="flex-1 bg-primary"
                 disabled={isLoading || !multiplayer.isConnected}
               >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tạo phòng'}
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Room'}
               </Button>
             </div>
           </div>
@@ -205,25 +205,25 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
         {/* Join Room */}
         {mode === 'join' && (
           <div className="space-y-4">
-            <h2 className="font-display text-xl text-center mb-4">Vào phòng</h2>
+            <h2 className="font-display text-xl text-center mb-4">Join Room</h2>
 
             <div>
-              <label className="text-sm text-muted-foreground">Tên của bạn</label>
+              <label className="text-sm text-muted-foreground">Your Name</label>
               <Input
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
-                placeholder="Nhập tên..."
+                placeholder="Enter name..."
                 className="mt-1"
                 maxLength={20}
               />
             </div>
 
             <div>
-              <label className="text-sm text-muted-foreground">Mã phòng</label>
+              <label className="text-sm text-muted-foreground">Room Code</label>
               <Input
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                placeholder="VD: ABC123"
+                placeholder="e.g. ABC123"
                 className="mt-1 font-mono text-lg tracking-widest"
                 maxLength={6}
               />
@@ -235,14 +235,14 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
                 onClick={() => setMode('menu')}
                 className="flex-1"
               >
-                Quay lại
+                Back
               </Button>
               <Button
                 onClick={handleJoinRoom}
                 className="flex-1 bg-secondary"
                 disabled={isLoading || !multiplayer.isConnected}
               >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Vào phòng'}
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Join Room'}
               </Button>
             </div>
           </div>
@@ -251,11 +251,11 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
         {/* Waiting Room */}
         {mode === 'waiting' && multiplayer.roomInfo && (
           <div className="space-y-6 text-center">
-            <h2 className="font-display text-xl">Phòng chờ</h2>
+            <h2 className="font-display text-xl">Waiting Room</h2>
 
             {/* Room Code */}
             <div className="p-4 rounded-lg bg-muted/50">
-              <div className="text-sm text-muted-foreground mb-1">Mã phòng</div>
+              <div className="text-sm text-muted-foreground mb-1">Room Code</div>
               <div className="flex items-center justify-center gap-2">
                 <span className="font-mono text-3xl font-bold text-primary tracking-widest">
                   {multiplayer.roomInfo.roomCode}
@@ -276,10 +276,10 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-primary" />
                   <span>{multiplayer.roomInfo.isHost ? playerName : multiplayer.roomInfo.hostName}</span>
-                  {multiplayer.roomInfo.isHost && <span className="text-xs text-muted-foreground">(Bạn)</span>}
+                  {multiplayer.roomInfo.isHost && <span className="text-xs text-muted-foreground">(You)</span>}
                 </div>
                 {(multiplayer.roomInfo.isHost ? multiplayer.isReady : multiplayer.opponentReady) && (
-                  <span className="text-xs text-green-500">Sẵn sàng</span>
+                  <span className="text-xs text-green-500">Ready</span>
                 )}
               </div>
 
@@ -290,17 +290,17 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
                     multiplayer.roomInfo.opponentName ? (
                       <span>{multiplayer.roomInfo.opponentName}</span>
                     ) : (
-                      <span className="text-muted-foreground italic">Đang chờ...</span>
+                      <span className="text-muted-foreground italic">Waiting...</span>
                     )
                   ) : (
                     <>
                       <span>{playerName}</span>
-                      <span className="text-xs text-muted-foreground">(Bạn)</span>
+                      <span className="text-xs text-muted-foreground">(You)</span>
                     </>
                   )}
                 </div>
                 {(multiplayer.roomInfo.isHost ? multiplayer.opponentReady : multiplayer.isReady) && (
-                  <span className="text-xs text-green-500">Sẵn sàng</span>
+                  <span className="text-xs text-green-500">Ready</span>
                 )}
               </div>
             </div>
@@ -312,12 +312,12 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
                 className="w-full h-12 text-lg font-display bg-accent hover:bg-accent/90"
                 disabled={multiplayer.roomInfo.isHost && !multiplayer.roomInfo.opponentName}
               >
-                Sẵn sàng
+                Ready
               </Button>
             ) : (
               <div className="flex items-center justify-center gap-2 text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Đang chờ đối thủ...</span>
+                <span>Waiting for opponent...</span>
               </div>
             )}
 
@@ -329,7 +329,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ multiplayer, onGameSta
               }}
               className="text-destructive"
             >
-              Rời phòng
+              Leave Room
             </Button>
           </div>
         )}

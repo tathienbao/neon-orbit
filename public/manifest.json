@@ -1,7 +1,7 @@
 {
   "name": "Neon Marble",
   "short_name": "NeonMarble",
-  "description": "Game bắn bi phong cách neon cyberpunk",
+  "description": "2-player marble shooting game with neon cyberpunk style",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

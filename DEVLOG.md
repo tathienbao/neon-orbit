@@ -1,10 +1,62 @@
 # Development Log - Neon Marble
 
-Nhật ký phát triển dự án game Neon Marble.
+Development log for the Neon Marble game project.
 
 ---
 
 ## 2025-12-26
+
+### Mobile UI Overhaul & Responsive Layout
+
+**Changes:**
+
+1. **PWA Branding:**
+   - Created `public/logo.svg` - Neon-style logo with marble + orbit rings
+   - Created `public/favicon.svg` - Simplified version for browser tabs
+   - Created `public/manifest.json` - PWA manifest for "Install as App" functionality
+   - Updated `index.html` with proper meta tags and favicon links
+
+2. **Joystick Area with Fixed Aspect Ratio (5:3):**
+   - Mobile layout now splits into map area + joystick area
+   - Joystick area: height = screenWidth × 3/5 (maintains 5:3 ratio)
+   - Map area: takes remaining vertical space
+   - Consistent layout across different phone sizes
+
+3. **Responsive Scaling for Online Mode:**
+   - When guest joins from mobile and host has larger screen:
+     - Map is scaled down to fit available width (minus padding)
+     - Height calculation accounts for padding
+   - Added `fillHeight` prop to GameCanvas for mobile layouts
+
+4. **Layout Config:**
+   ```typescript
+   LAYOUT_CONFIG = {
+     MOBILE_BREAKPOINT: 768,
+     JOYSTICK_BOTTOM: 24,
+     JOYSTICK_RIGHT: 24,
+   }
+   ```
+
+5. **Joystick Compact Mode:**
+   - Added `compact` prop to Joystick component
+   - Smaller sizes for mobile overlay: w-28 h-28 (vs w-36 h-36)
+
+**Files changed:**
+- `src/config/gameConfig.ts` - Added LAYOUT_CONFIG
+- `src/components/Joystick.tsx` - Added compact prop
+- `src/components/NeonMarbleGame.tsx` - Mobile layout with 5:3 joystick area
+- `src/components/OnlineMarbleGame.tsx` - Mobile layout + responsive scaling
+- `src/components/GameCanvas.tsx` - Added fillHeight prop
+- `public/logo.svg`, `public/favicon.svg`, `public/manifest.json` - PWA assets
+- `index.html` - Meta tags and PWA links
+
+**Result:**
+- ✅ Consistent mobile layout for both host and guest
+- ✅ PWA installable on Chrome/mobile browsers
+- ✅ No more clipping issues when joining from smaller screen
+- ✅ Border radius visible on all sides
+
+---
 
 ### Camera Panning - Boundary Zone + Hysteresis
 

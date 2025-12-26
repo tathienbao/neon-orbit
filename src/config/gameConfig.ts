@@ -30,9 +30,13 @@ export const MAP_CONFIG = {
   // Map height multiplier relative to screen height
   HEIGHT_MULTIPLIER: 5,
   // Maximum map width
-  MAX_WIDTH: 400,
-  // Padding from screen edges
-  PADDING: 40,
+  MAX_WIDTH: 500,
+  // Minimum map width
+  MIN_WIDTH: 300,
+  // Padding from screen edges (mobile)
+  PADDING: 20,
+  // Padding from screen edges (desktop)
+  PADDING_DESKTOP: 40,
   // Safe zone at start (no obstacles)
   SAFE_ZONE_START: 150,
   // Safe zone at goal (no obstacles)
@@ -45,6 +49,14 @@ export const MAP_CONFIG = {
   GOAL_RADIUS: 35,
   // Obstacles per map height unit
   OBSTACLES_PER_HEIGHT: 80,
+} as const;
+
+export const LAYOUT_CONFIG = {
+  // Mobile breakpoint in pixels
+  MOBILE_BREAKPOINT: 768,
+  // Joystick position (mobile overlay)
+  JOYSTICK_BOTTOM: 24,
+  JOYSTICK_RIGHT: 24,
 } as const;
 
 export const OBSTACLE_CONFIG = {

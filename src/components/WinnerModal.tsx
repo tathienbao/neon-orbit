@@ -15,13 +15,13 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({ gameState, onRestart }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div 
+      <div
         className="glass-panel rounded-2xl p-8 text-center max-w-sm mx-4 animate-scale-in"
         style={{
           boxShadow: `0 0 60px ${winnerMarble.glowColor}, 0 0 120px ${winnerMarble.glowColor}40`,
         }}
       >
-        <div 
+        <div
           className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center animate-pulse-glow"
           style={{
             background: `radial-gradient(circle, ${winnerMarble.color}, ${winnerMarble.color}80)`,
@@ -31,22 +31,22 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({ gameState, onRestart }
           <Trophy className="w-10 h-10 text-background" />
         </div>
 
-        <h2 
+        <h2
           className="font-display text-3xl font-bold mb-2"
-          style={{ 
+          style={{
             color: winnerMarble.color,
             textShadow: `0 0 20px ${winnerMarble.glowColor}`,
           }}
         >
-          NGƯỜI CHƠI {gameState.winner + 1}
+          PLAYER {gameState.winner + 1}
         </h2>
-        
+
         <p className="text-2xl font-display font-bold text-foreground mb-2">
-          CHIẾN THẮNG!
+          WINS!
         </p>
-        
+
         <p className="text-muted-foreground mb-6">
-          Hoàn thành trong {gameState.turnCount} lượt
+          Completed in {gameState.turnCount} turns
         </p>
 
         <Button
@@ -58,7 +58,7 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({ gameState, onRestart }
           }}
         >
           <RotateCcw className="w-4 h-4 mr-2" />
-          Chơi lại
+          Play Again
         </Button>
       </div>
     </div>

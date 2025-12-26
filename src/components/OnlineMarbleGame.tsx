@@ -7,7 +7,7 @@ import { GameUI } from './GameUI';
 import { WinnerModal } from './WinnerModal';
 import { ErrorBoundary } from './ErrorBoundary';
 import { toast } from 'sonner';
-import { PHYSICS_CONFIG, UI_CONFIG } from '@/config/gameConfig';
+import { PHYSICS_CONFIG, UI_CONFIG, LAYOUT_CONFIG } from '@/config/gameConfig';
 import { RoomInfo, useMultiplayer } from '@/hooks/useMultiplayer';
 import { ArrowLeft, Wifi } from 'lucide-react';
 import { Button } from './ui/button';
@@ -27,9 +27,19 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
 }) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [displayState, setDisplayState] = useState<GameState | null>(null); // What Guest actually renders
+  const [isMobile, setIsMobile] = useState(window.innerWidth < LAYOUT_CONFIG.MOBILE_BREAKPOINT);
   const isHost = roomInfo.isHost;
   const myPlayerIndex = roomInfo.playerIndex;
   const initRef = useRef(false);
+
+  // Detect mobile/desktop
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < LAYOUT_CONFIG.MOBILE_BREAKPOINT);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Buffered playback for Guest - smooth animation even with network jitter
   const stateBufferRef = useRef<GameState[]>([]);
@@ -46,8 +56,8 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
     if (isHost) {
       // Host sends initial game state to guest
       multiplayer.initGameState(newState);
-      toast.success('Game bắt đầu!', {
-        description: 'Bạn là Người chơi 1 (Xanh)',
+      toast.success('Game started!', {
+        description: 'You are Player 1 (Cyan)',
       });
     }
   }, [isHost, multiplayer]);
@@ -60,7 +70,7 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
     if (isHost) {
       initGame();
     } else {
-      toast.info('Đang đợi host khởi tạo game...');
+      toast.info('Waiting for host to start game...');
       // Request game state after a short delay to ensure listeners are set up
       setTimeout(() => {
         if (!gameState) {
@@ -93,8 +103,8 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
       }
 
       if (!gameState) {
-        toast.success('Game bắt đầu!', {
-          description: isHost ? 'Bạn là Người chơi 1 (Xanh)' : 'Bạn là Người chơi 2 (Hồng)',
+        toast.success('Game started!', {
+          description: isHost ? 'You are Player 1 (Cyan)' : 'You are Player 2 (Pink)',
         });
       }
     });
@@ -190,7 +200,7 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
       setGameState(newGameState);
       setDisplayState(newGameState);
       stateBufferRef.current = [];
-      toast.success('Game mới!');
+      toast.success('New game!');
     });
   }, [multiplayer]);
 
@@ -217,7 +227,7 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
       const newPaused = !prev.isPaused;
       const newState = { ...prev, isPaused: newPaused };
       setDisplayState(newState);
-      toast.info(newPaused ? 'Game tạm dừng' : 'Tiếp tục chơi', {
+      toast.info(newPaused ? 'Game paused' : 'Game resumed', {
         duration: UI_CONFIG.TOAST_DURATION,
       });
       return newState;
@@ -229,7 +239,7 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
 
     // Can only shoot on my turn
     if (gameState.currentPlayer !== myPlayerIndex) {
-      toast.warning('Chưa đến lượt của bạn!');
+      toast.warning('Not your turn!');
       return;
     }
 
@@ -282,11 +292,11 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
     setDisplayState(newState);
 
     if (nextPlayer === myPlayerIndex) {
-      toast.info('Đến lượt của bạn!', {
+      toast.info('Your turn!', {
         duration: UI_CONFIG.TOAST_DURATION,
       });
     } else {
-      toast.info('Lượt của đối thủ', {
+      toast.info("Opponent's turn", {
         duration: UI_CONFIG.TOAST_DURATION,
       });
     }
@@ -320,7 +330,7 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="font-display text-2xl text-primary neon-text animate-pulse">
-          Đang tải...
+          Loading...
         </div>
       </div>
     );
@@ -332,6 +342,100 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
   const isMyTurn = gameState.currentPlayer === myPlayerIndex;
   const canShoot = !isAnyMoving && !gameState.gameOver && !myMarble.hasFinished && !gameState.isPaused && isMyTurn;
 
+  // Mobile layout: map area + joystick area (5:3 ratio)
+  // Joystick area: width = screen width, height = width * 3/5
+  const screenWidth = window.innerWidth;
+  const screenHeight = window.innerHeight;
+  const joystickAreaHeight = screenWidth * (3 / 5);
+  const mapAreaHeight = screenHeight - joystickAreaHeight;
+
+  // Scale factor if map is larger than available width (screen minus padding)
+  const mapWidth = gameState.mapWidth;
+  const padding = 16; // p-2 = 8px each side
+  const availableWidth = screenWidth - padding;
+  const needsScale = mapWidth > availableWidth;
+  const scaleFactor = needsScale ? availableWidth / mapWidth : 1;
+
+  if (isMobile) {
+    return (
+      <div className="fixed inset-0 bg-background flex flex-col">
+        {/* Map area - takes remaining height after joystick */}
+        <div
+          className="relative overflow-hidden p-2"
+          style={{ height: mapAreaHeight }}
+        >
+          {/* Scale wrapper if needed */}
+          <div
+            style={needsScale ? {
+              transform: `scale(${scaleFactor})`,
+              transformOrigin: 'top left',
+              width: mapWidth,
+              height: (mapAreaHeight - padding) / scaleFactor,
+            } : { height: '100%' }}
+          >
+            <GameCanvas
+              gameState={displayState || gameState}
+              onGameStateChange={handleGameStateChange}
+              onTurnEnd={handleTurnEnd}
+              isHost={isHost}
+              myPlayerIndex={myPlayerIndex}
+              fillHeight
+            />
+          </div>
+
+          {/* Top overlay - minimal UI */}
+          <div className="absolute top-0 left-0 right-0 p-2 flex justify-between items-start z-10 pointer-events-none">
+            <div className="pointer-events-auto flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onLeave}
+                className="h-8 px-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <GameUI
+                gameState={gameState}
+                onRestart={handleRestart}
+                onTogglePause={handleTogglePause}
+              />
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-1 text-xs bg-background/80 px-2 py-1 rounded">
+                <Wifi className="w-3 h-3 text-green-500" />
+                <span>{roomInfo.roomCode}</span>
+              </div>
+              <div
+                className={`font-display text-xs font-bold px-2 py-1 rounded ${
+                  isMyTurn ? 'bg-accent/20 text-accent' : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {isMyTurn ? 'Your turn' : 'Wait...'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Joystick area - fixed 4:3 ratio */}
+        <div
+          className="flex items-center justify-center"
+          style={{ height: joystickAreaHeight }}
+        >
+          <Joystick
+            onShoot={handleShoot}
+            disabled={!canShoot}
+            playerColor={myMarble.color}
+            compact
+          />
+        </div>
+
+        {/* Winner Modal */}
+        <WinnerModal gameState={gameState} onRestart={handleRestart} />
+      </div>
+    );
+  }
+
+  // Desktop layout
   return (
     <div className="min-h-screen flex flex-col p-4 gap-4">
       {/* Header */}
@@ -343,7 +447,7 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
           className="absolute left-0 top-0"
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
-          Rời game
+          Leave
         </Button>
 
         <h1 className="font-display text-3xl md:text-4xl font-bold text-primary neon-text tracking-wider">
@@ -351,7 +455,7 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
         </h1>
         <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-1">
           <Wifi className="w-3 h-3 text-green-500" />
-          <span>Online - Phòng {roomInfo.roomCode}</span>
+          <span>Online - Room {roomInfo.roomCode}</span>
         </div>
       </header>
 
@@ -369,14 +473,14 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
             isMyTurn ? 'bg-accent/20 text-accent' : 'bg-muted text-muted-foreground'
           }`}
         >
-          {isMyTurn ? 'Lượt của bạn!' : 'Lượt của đối thủ...'}
+          {isMyTurn ? 'Your turn!' : "Opponent's turn..."}
         </div>
       </div>
 
-      {/* Game area */}
-      <div className="flex-1 flex flex-col md:flex-row gap-4 items-center justify-center">
+      {/* Game area - desktop */}
+      <div className="flex-1 flex flex-row gap-4 items-center justify-center">
         {/* Canvas */}
-        <div className="flex-1 w-full max-w-md">
+        <div className="flex-1 max-w-lg">
           <GameCanvas
             gameState={displayState || gameState}
             onGameStateChange={handleGameStateChange}
@@ -390,7 +494,7 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
         <div className="flex flex-col items-center gap-4">
           <div className="text-center mb-2">
             <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-              {gameState.isPaused ? 'Tạm dừng' : isAnyMoving ? 'Đang di chuyển...' : isMyTurn ? 'Kéo để bắn' : 'Chờ đối thủ'}
+              {gameState.isPaused ? 'Paused' : isAnyMoving ? 'Moving...' : isMyTurn ? 'Drag to shoot' : 'Wait for opponent'}
             </div>
             <div
               className="font-display text-lg font-bold"
@@ -399,7 +503,7 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
                 textShadow: `0 0 10px ${myMarble.glowColor}`,
               }}
             >
-              Bạn: Người chơi {myPlayerIndex + 1}
+              You: Player {myPlayerIndex + 1}
             </div>
           </div>
 
@@ -410,7 +514,7 @@ const OnlineMarbleGameInner: React.FC<OnlineMarbleGameProps> = ({
           />
 
           <p className="text-xs text-muted-foreground text-center max-w-[150px]">
-            {isMyTurn ? 'Kéo núm theo hướng muốn bắn' : 'Đợi đối thủ bắn...'}
+            {isMyTurn ? 'Drag to aim and shoot' : 'Waiting for opponent...'}
           </p>
         </div>
       </div>

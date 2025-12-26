@@ -1,43 +1,63 @@
-# Plan: Mobile UI Overhaul
+# Mobile UI Implementation
 
-## Trạng thái: Chưa implement
-
----
-
-## Vấn đề hiện tại
-
-### Layout
-- Container `max-w-md` (448px) có thể nhỏ hơn map width
-- Canvas bị clip trên mobile
-- Joystick chiếm không gian dưới canvas
-
-### Branding
-- Cần thiết kế logo/icon cho game
-- Favicon, app icon cho PWA
-- Splash screen
+## Status: Completed ✅
 
 ---
 
-## Yêu cầu
+## What Was Implemented
 
-1. **Map width**: Responsive với max 500px
-2. **Mobile**: Full-screen game + joystick overlay
-3. **Container**: Không bao giờ nhỏ hơn map width
-4. **Branding**: Logo, favicon, app icons
+### 1. Responsive Layout
 
----
+**Mobile Layout (< 768px):**
+- Screen divided into **map area** (top) and **joystick area** (bottom)
+- Joystick area uses **5:3 aspect ratio** (width:height = 5:3)
+- Map area fills remaining vertical space
+- Joystick centered in its area
 
-## Implementation Plan
+**Desktop Layout (>= 768px):**
+- Side-by-side layout: map on left, controls on right
+- Standard joystick size
 
-### Phase 1: Responsive Layout
+### 2. Responsive Scaling (Online Mode)
 
-#### 1.1 Update config
+When guest joins from mobile with smaller screen than host:
+- Map is scaled down to fit available width
+- Accounts for padding (16px total)
+- Height calculation adjusted for scaled content
+
 ```typescript
+// Scale calculation
+const padding = 16; // p-2 = 8px each side
+const availableWidth = screenWidth - padding;
+const needsScale = mapWidth > availableWidth;
+const scaleFactor = needsScale ? availableWidth / mapWidth : 1;
+```
+
+### 3. Joystick Compact Mode
+
+Added `compact` prop to Joystick component:
+- Normal: `w-36 h-36` (144px)
+- Compact: `w-28 h-28` (112px)
+
+### 4. GameCanvas fillHeight Prop
+
+Added `fillHeight` prop to GameCanvas:
+- `false` (default): Uses `calc(100vh - 280px)` for desktop
+- `true`: Uses `100%` to fill parent container (mobile)
+
+---
+
+## Configuration
+
+```typescript
+// src/config/gameConfig.ts
+
 export const MAP_CONFIG = {
-  MAX_WIDTH: 500,       // Tăng từ 400
-  MIN_WIDTH: 300,       // Mới
-  PADDING: 20,          // Giảm từ 40 cho mobile
+  MAX_WIDTH: 500,
+  MIN_WIDTH: 300,
+  PADDING: 20,          // Mobile padding
   PADDING_DESKTOP: 40,
+  // ...
 } as const;
 
 export const LAYOUT_CONFIG = {
@@ -47,85 +67,91 @@ export const LAYOUT_CONFIG = {
 } as const;
 ```
 
-#### 1.2 Mobile layout pattern
+---
+
+## Mobile Layout Code Pattern
+
 ```tsx
-{isMobile ? (
-  <div className="fixed inset-0">
-    <GameCanvas ... className="w-full h-full" />
-    <div className="fixed bottom-6 right-6 z-10">
-      <Joystick compact />
+// Calculate joystick area with 5:3 ratio
+const screenWidth = window.innerWidth;
+const screenHeight = window.innerHeight;
+const joystickAreaHeight = screenWidth * (3 / 5);
+const mapAreaHeight = screenHeight - joystickAreaHeight;
+
+if (isMobile) {
+  return (
+    <div className="fixed inset-0 bg-background flex flex-col">
+      {/* Map area */}
+      <div
+        className="relative overflow-hidden p-2"
+        style={{ height: mapAreaHeight }}
+      >
+        <GameCanvas ... fillHeight />
+        {/* Overlay UI */}
+      </div>
+
+      {/* Joystick area - 5:3 ratio */}
+      <div
+        className="flex items-center justify-center"
+        style={{ height: joystickAreaHeight }}
+      >
+        <Joystick ... compact />
+      </div>
     </div>
-  </div>
-) : (
-  <div className="flex flex-row gap-4">
-    <GameCanvas ... />
-    <Joystick />
-  </div>
-)}
-```
-
-#### 1.3 Joystick compact mode
-```typescript
-interface JoystickProps {
-  compact?: boolean;  // Nhỏ hơn cho mobile overlay
-}
-
-const containerSize = compact ? 'w-28 h-28' : 'w-36 h-36';
-```
-
-#### 1.4 CSS safe-area (notched phones)
-```css
-.joystick-overlay {
-  bottom: calc(24px + env(safe-area-inset-bottom));
-  right: calc(24px + env(safe-area-inset-right));
-}
-```
-
-### Phase 2: Branding & Icons
-
-#### 2.1 Logo design
-- Style: Neon cyberpunk
-- Colors: Cyan (#00FFFF), Magenta (#FF00FF)
-- Elements: Marble + orbit/ring
-
-#### 2.2 Required assets
-- `favicon.ico` - 32x32
-- `apple-touch-icon.png` - 180x180
-- `icon-192.png` - PWA icon
-- `icon-512.png` - PWA splash
-- `og-image.png` - Social sharing (1200x630)
-
-#### 2.3 PWA manifest updates
-```json
-{
-  "name": "Neon Marble",
-  "short_name": "NeonMarble",
-  "icons": [...],
-  "theme_color": "#00FFFF",
-  "background_color": "#0a0a0f"
+  );
 }
 ```
 
 ---
 
-## Files cần sửa
+## PWA & Branding
 
-| File | Thay đổi |
-|------|----------|
-| `src/config/gameConfig.ts` | Update MAP_CONFIG, thêm LAYOUT_CONFIG |
-| `src/components/NeonMarbleGame.tsx` | Mobile layout pattern |
-| `src/components/OnlineMarbleGame.tsx` | Mobile layout pattern |
-| `src/components/Joystick.tsx` | Thêm compact prop |
-| `src/utils/mapGenerator.ts` | Responsive map width |
-| `src/index.css` | Safe-area utilities |
-| `public/` | Icons, manifest |
-| `index.html` | Meta tags, favicons |
+### Assets Created
+- `public/logo.svg` - Neon-style logo (marble + orbit rings)
+- `public/favicon.svg` - Browser favicon
+- `public/og-image.png` - Social sharing image (512x512)
+- `public/manifest.json` - PWA manifest
+
+### Meta Tags (index.html)
+```html
+<!-- Open Graph -->
+<meta property="og:title" content="Neon Marble" />
+<meta property="og:description" content="A 2-player marble shooting game..." />
+<meta property="og:image" content="https://neon-marble.pages.dev/og-image.png" />
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:image" content="https://neon-marble.pages.dev/og-image.png" />
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json" />
+```
 
 ---
 
-## Edge cases
+## Files Changed
 
-- Notched phones → Dùng `env(safe-area-inset-*)`
-- Landscape mode → Layout có thể cần điều chỉnh
-- Touch conflicts → Joystick capture riêng, canvas view-only
-- Small screens (<300px) → Minimum viable layout
+| File | Changes |
+|------|---------|
+| `src/config/gameConfig.ts` | Added LAYOUT_CONFIG |
+| `src/components/NeonMarbleGame.tsx` | Mobile layout with 5:3 joystick |
+| `src/components/OnlineMarbleGame.tsx` | Mobile layout + responsive scaling |
+| `src/components/Joystick.tsx` | Added `compact` prop |
+| `src/components/GameCanvas.tsx` | Added `fillHeight` prop |
+| `public/logo.svg` | New logo |
+| `public/favicon.svg` | New favicon |
+| `public/og-image.png` | Social sharing image |
+| `public/manifest.json` | PWA manifest |
+| `index.html` | Updated meta tags, lang="en" |
+
+---
+
+## UI Language
+
+All UI text has been translated to English:
+- Toasts (success, error, info messages)
+- Labels and hints
+- Buttons
+- Status indicators
+- Winner modal
+- Lobby screen

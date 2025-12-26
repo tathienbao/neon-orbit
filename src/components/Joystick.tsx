@@ -6,11 +6,12 @@ interface JoystickProps {
   onShoot: (direction: Vector2D, power: number) => void;
   disabled: boolean;
   playerColor: string;
+  compact?: boolean; // Smaller size for mobile overlay
 }
 
 const { MAX_DISTANCE, MIN_SHOOT_DISTANCE } = JOYSTICK_CONFIG;
 
-export const Joystick: React.FC<JoystickProps> = ({ onShoot, disabled, playerColor }) => {
+export const Joystick: React.FC<JoystickProps> = ({ onShoot, disabled, playerColor, compact = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState<Vector2D>({ x: 0, y: 0 });
@@ -104,10 +105,15 @@ export const Joystick: React.FC<JoystickProps> = ({ onShoot, disabled, playerCol
 
   const power = Math.sqrt(position.x * position.x + position.y * position.y) / MAX_DISTANCE;
 
+  // Size classes based on compact mode
+  const containerSize = compact ? 'w-28 h-28' : 'w-36 h-36';
+  const knobSize = compact ? 'w-11 h-11' : 'w-14 h-14';
+  const centerDotSize = compact ? 'w-2 h-2' : 'w-3 h-3';
+
   return (
     <div
       ref={containerRef}
-      className={`relative w-36 h-36 rounded-full border-2 flex items-center justify-center select-none touch-none transition-opacity ${
+      className={`relative ${containerSize} rounded-full border-2 flex items-center justify-center select-none touch-none transition-opacity ${
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
       }`}
       style={{
@@ -135,7 +141,7 @@ export const Joystick: React.FC<JoystickProps> = ({ onShoot, disabled, playerCol
 
       {/* Joystick knob */}
       <div
-        className="absolute w-14 h-14 rounded-full transition-transform"
+        className={`absolute ${knobSize} rounded-full transition-transform`}
         style={{
           transform: `translate(${position.x}px, ${position.y}px)`,
           background: `radial-gradient(circle at 30% 30%, ${playerColor}, ${playerColor}80)`,
@@ -145,7 +151,7 @@ export const Joystick: React.FC<JoystickProps> = ({ onShoot, disabled, playerCol
 
       {/* Center dot */}
       <div
-        className="absolute w-3 h-3 rounded-full"
+        className={`absolute ${centerDotSize} rounded-full`}
         style={{ backgroundColor: playerColor, opacity: 0.5 }}
       />
     </div>
