@@ -70,14 +70,23 @@ export const OBSTACLE_CONFIG = {
   // Circle size ranges
   CIRCLE_RADIUS_MIN: 20,
   CIRCLE_RADIUS_MAX: 50,
-  // Obstacle colors (neon palette)
+  // Obstacle colors - MUTED palette (don't compete with marbles)
   COLORS: [
-    'hsl(180, 100%, 50%)',  // cyan
-    'hsl(300, 100%, 60%)',  // magenta
-    'hsl(120, 100%, 50%)',  // green
-    'hsl(60, 100%, 50%)',   // yellow
-    'hsl(30, 100%, 55%)',   // orange
+    'hsl(220, 30%, 35%)',   // muted blue-gray
+    'hsl(240, 25%, 30%)',   // dark purple-gray
+    'hsl(200, 35%, 40%)',   // steel blue
   ],
+  // Reduced glow for obstacles
+  GLOW_BLUR: 8,
+} as const;
+
+export const GOAL_CONFIG = {
+  RADIUS: 35,
+  COLOR: 'hsl(120, 100%, 50%)',           // Green
+  GLOW_COLOR: 'hsla(120, 100%, 50%, 0.8)',
+  INNER_COLOR: 'hsl(120, 100%, 20%)',     // Dark green center
+  CENTER_COLOR: 'hsl(240, 20%, 8%)',      // Near-black center (the "hole")
+  GRID_COLOR: 'hsla(120, 100%, 50%, 0.4)', // Green grid lines
 } as const;
 
 export const JOYSTICK_CONFIG = {

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GameState } from '@/types/game';
 import { updateMarblePhysics, processCollisions } from '@/utils/physics';
-import { CANVAS_CONFIG, CAMERA_CONFIG } from '@/config/gameConfig';
+import { CANVAS_CONFIG, CAMERA_CONFIG, OBSTACLE_CONFIG, GOAL_CONFIG } from '@/config/gameConfig';
 
 interface GameCanvasProps {
   gameState: GameState;
@@ -24,6 +24,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollY, setScrollY] = useState(0);
   const [showDebugBoundary, setShowDebugBoundary] = useState(false);
+  const [showGoalIndicator, setShowGoalIndicator] = useState(true);
+  const [indicatorTick, setIndicatorTick] = useState(0);
+  const goalIndicatorTimeRef = useRef(Date.now());
 
   // Use refs to avoid recreating game loop on every state change
   const gameStateRef = useRef(gameState);
@@ -111,6 +114,27 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   useEffect(() => {
     showDebugBoundaryRef.current = showDebugBoundary;
   }, [showDebugBoundary]);
+
+  // Goal indicator animation: blink for 3 seconds
+  useEffect(() => {
+    if (!showGoalIndicator) return;
+
+    // Force re-render every 100ms for blinking effect
+    const blinkInterval = setInterval(() => {
+      setIndicatorTick(t => t + 1);
+    }, 100);
+
+    // Hide after 3 seconds
+    const hideTimer = setTimeout(() => {
+      setShowGoalIndicator(false);
+      clearInterval(blinkInterval);
+    }, 3000);
+
+    return () => {
+      clearInterval(blinkInterval);
+      clearTimeout(hideTimer);
+    };
+  }, [showGoalIndicator]);
 
   // Camera tracking loop - runs independently at 60fps
   useEffect(() => {
@@ -357,35 +381,78 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     ctx.save();
     ctx.translate(0, -scrollY);
 
-    // Draw goal
+    // Draw goal - Black Hole Effect
     const goal = gameState.goal;
-    const goalGradient = ctx.createRadialGradient(
-      goal.position.x, goal.position.y, 0,
-      goal.position.x, goal.position.y, goal.radius
-    );
-    goalGradient.addColorStop(0, 'hsl(120, 100%, 30%)');
-    goalGradient.addColorStop(0.5, 'hsl(120, 100%, 20%)');
-    goalGradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = goalGradient;
+    const gx = goal.position.x;
+    const gy = goal.position.y;
+    const gr = goal.radius;
+
+    // Outer glow
+    ctx.shadowColor = GOAL_CONFIG.GLOW_COLOR;
+    ctx.shadowBlur = 30;
+
+    // Draw curved grid lines (gravity well effect)
+    ctx.save();
     ctx.beginPath();
-    ctx.arc(goal.position.x, goal.position.y, goal.radius, 0, Math.PI * 2);
+    ctx.arc(gx, gy, gr + 5, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Concentric circles getting smaller toward center
+    const ringCount = 5;
+    for (let i = ringCount; i > 0; i--) {
+      const ratio = i / ringCount;
+      const ringRadius = gr * ratio;
+      ctx.strokeStyle = GOAL_CONFIG.GRID_COLOR;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(gx, gy, ringRadius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Radial lines curving inward
+    const lineCount = 12;
+    for (let i = 0; i < lineCount; i++) {
+      const angle = (i / lineCount) * Math.PI * 2;
+      ctx.strokeStyle = GOAL_CONFIG.GRID_COLOR;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      // Start from outer edge
+      const startX = gx + Math.cos(angle) * gr;
+      const startY = gy + Math.sin(angle) * gr;
+      ctx.moveTo(startX, startY);
+      // Curve toward center with bezier
+      const midAngle = angle + 0.3; // Slight rotation for curve effect
+      const midX = gx + Math.cos(midAngle) * gr * 0.5;
+      const midY = gy + Math.sin(midAngle) * gr * 0.5;
+      ctx.quadraticCurveTo(midX, midY, gx, gy);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Dark center (the "hole")
+    const holeGradient = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr * 0.4);
+    holeGradient.addColorStop(0, GOAL_CONFIG.CENTER_COLOR);
+    holeGradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = holeGradient;
+    ctx.beginPath();
+    ctx.arc(gx, gy, gr * 0.4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Goal ring
-    ctx.strokeStyle = 'hsl(120, 100%, 50%)';
+    // Outer ring with glow
+    ctx.strokeStyle = GOAL_CONFIG.COLOR;
     ctx.lineWidth = 3;
-    ctx.shadowColor = 'hsl(120, 100%, 50%)';
-    ctx.shadowBlur = 20;
+    ctx.shadowColor = GOAL_CONFIG.GLOW_COLOR;
+    ctx.shadowBlur = 25;
     ctx.beginPath();
-    ctx.arc(goal.position.x, goal.position.y, goal.radius, 0, Math.PI * 2);
+    ctx.arc(gx, gy, gr, 0, Math.PI * 2);
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // Draw obstacles
+    // Draw obstacles (muted colors, reduced glow)
     for (const obstacle of gameState.obstacles) {
       ctx.fillStyle = obstacle.color;
       ctx.shadowColor = obstacle.color;
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = OBSTACLE_CONFIG.GLOW_BLUR;
 
       if (obstacle.type === 'rectangle' && obstacle.width && obstacle.height) {
         ctx.fillRect(
@@ -472,6 +539,46 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     ctx.fillStyle = 'hsla(180, 100%, 50%, 0.3)';
     ctx.fillRect(displayWidth - 6, indicatorY, 4, indicatorHeight);
 
+    // Draw blinking goal arrow indicator (first 3 seconds)
+    const goalScreenY = gameState.goal.position.y - scrollY;
+    if (showGoalIndicator && goalScreenY > displayHeight) {
+      // Blink effect: visible for 500ms, hidden for 300ms
+      const elapsed = Date.now() - goalIndicatorTimeRef.current;
+      const blinkCycle = elapsed % 800;
+      const isVisible = blinkCycle < 500;
+
+      if (isVisible) {
+        const arrowX = displayWidth / 2;
+        const arrowY = displayHeight - 30;
+
+        // Arrow glow
+        ctx.shadowColor = GOAL_CONFIG.GLOW_COLOR;
+        ctx.shadowBlur = 15;
+
+        // Draw down arrow
+        ctx.fillStyle = GOAL_CONFIG.COLOR;
+        ctx.beginPath();
+        ctx.moveTo(arrowX, arrowY + 15);      // Bottom point
+        ctx.lineTo(arrowX - 12, arrowY - 5);  // Left
+        ctx.lineTo(arrowX - 5, arrowY - 5);   // Left inner
+        ctx.lineTo(arrowX - 5, arrowY - 15);  // Top left
+        ctx.lineTo(arrowX + 5, arrowY - 15);  // Top right
+        ctx.lineTo(arrowX + 5, arrowY - 5);   // Right inner
+        ctx.lineTo(arrowX + 12, arrowY - 5);  // Right
+        ctx.closePath();
+        ctx.fill();
+
+        // "GOAL" text
+        ctx.fillStyle = GOAL_CONFIG.COLOR;
+        ctx.font = 'bold 10px Orbitron';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('GOAL', arrowX, arrowY - 18);
+
+        ctx.shadowBlur = 0;
+      }
+    }
+
     // Draw debug boundary frame (toggle with C key)
     if (showDebugBoundary) {
       const boundarySize = displayHeight * CAMERA_CONFIG.BOUNDARY_RATIO;
@@ -502,7 +609,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       ctx.fillText('BOUNDARY ZONE', 5, 5);
       ctx.fillText('(fast camera)', 5, 17);
     }
-  }, [gameState, scrollY, showDebugBoundary]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState, scrollY, showDebugBoundary, showGoalIndicator, indicatorTick]);
 
   // Render on state change
   useEffect(() => {
