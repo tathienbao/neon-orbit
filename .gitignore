@@ -25,3 +25,6 @@ dist-ssr
 
 # Binary packages
 *.deb
+
+# Claude AI config (private)
+CLAUDE.md

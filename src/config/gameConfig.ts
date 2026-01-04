@@ -70,11 +70,40 @@ export const OBSTACLE_CONFIG = {
   // Circle size ranges
   CIRCLE_RADIUS_MIN: 20,
   CIRCLE_RADIUS_MAX: 50,
-  // Obstacle colors - MUTED palette (don't compete with marbles)
+  // Obstacle color themes - MUTED palettes (don't compete with marbles)
+  // Each game randomly picks one theme
+  THEMES: {
+    ice: [
+      'hsl(200, 40%, 35%)',   // ice blue
+      'hsl(220, 35%, 40%)',   // steel blue
+      'hsl(180, 30%, 30%)',   // dark cyan
+    ],
+    lava: [
+      'hsl(0, 35%, 30%)',     // dark red
+      'hsl(20, 40%, 35%)',    // burnt orange
+      'hsl(350, 30%, 25%)',   // maroon
+    ],
+    forest: [
+      'hsl(140, 30%, 28%)',   // dark green
+      'hsl(80, 25%, 32%)',    // olive
+      'hsl(160, 25%, 25%)',   // teal dark
+    ],
+    space: [
+      'hsl(260, 35%, 30%)',   // deep purple
+      'hsl(240, 30%, 35%)',   // navy
+      'hsl(280, 25%, 28%)',   // dark violet
+    ],
+    gold: [
+      'hsl(40, 35%, 35%)',    // bronze
+      'hsl(25, 40%, 30%)',    // copper
+      'hsl(45, 30%, 28%)',    // dark gold
+    ],
+  },
+  // Fallback colors (randomly selected theme)
   COLORS: [
-    'hsl(220, 30%, 35%)',   // muted blue-gray
-    'hsl(240, 25%, 30%)',   // dark purple-gray
-    'hsl(200, 35%, 40%)',   // steel blue
+    'hsl(220, 30%, 35%)',
+    'hsl(240, 25%, 30%)',
+    'hsl(200, 35%, 40%)',
   ],
   // Reduced glow for obstacles
   GLOW_BLUR: 8,

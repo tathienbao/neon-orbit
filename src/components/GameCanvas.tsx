@@ -549,31 +549,31 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       if (isVisible) {
         const arrowX = displayWidth / 2;
-        const arrowY = displayHeight - 30;
+        const arrowY = displayHeight - 50;
 
         // Arrow glow
         ctx.shadowColor = GOAL_CONFIG.GLOW_COLOR;
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 20;
 
-        // Draw down arrow
+        // Draw down arrow (larger)
         ctx.fillStyle = GOAL_CONFIG.COLOR;
         ctx.beginPath();
-        ctx.moveTo(arrowX, arrowY + 15);      // Bottom point
-        ctx.lineTo(arrowX - 12, arrowY - 5);  // Left
-        ctx.lineTo(arrowX - 5, arrowY - 5);   // Left inner
-        ctx.lineTo(arrowX - 5, arrowY - 15);  // Top left
-        ctx.lineTo(arrowX + 5, arrowY - 15);  // Top right
-        ctx.lineTo(arrowX + 5, arrowY - 5);   // Right inner
-        ctx.lineTo(arrowX + 12, arrowY - 5);  // Right
+        ctx.moveTo(arrowX, arrowY + 30);      // Bottom point
+        ctx.lineTo(arrowX - 25, arrowY);      // Left
+        ctx.lineTo(arrowX - 10, arrowY);      // Left inner
+        ctx.lineTo(arrowX - 10, arrowY - 20); // Top left
+        ctx.lineTo(arrowX + 10, arrowY - 20); // Top right
+        ctx.lineTo(arrowX + 10, arrowY);      // Right inner
+        ctx.lineTo(arrowX + 25, arrowY);      // Right
         ctx.closePath();
         ctx.fill();
 
-        // "GOAL" text
+        // "GOAL" text (larger)
         ctx.fillStyle = GOAL_CONFIG.COLOR;
-        ctx.font = 'bold 10px Orbitron';
+        ctx.font = 'bold 14px Orbitron';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillText('GOAL', arrowX, arrowY - 18);
+        ctx.fillText('GOAL', arrowX, arrowY - 25);
 
         ctx.shadowBlur = 0;
       }

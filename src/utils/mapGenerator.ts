@@ -5,14 +5,24 @@ function randomInRange(min: number, max: number): number {
   return Math.random() * (max - min) + min;
 }
 
+// Get random theme colors for this game
+function getRandomThemeColors(): string[] {
+  const themes = Object.values(OBSTACLE_CONFIG.THEMES);
+  const randomTheme = themes[Math.floor(Math.random() * themes.length)];
+  return randomTheme as string[];
+}
+
 function generateObstacles(mapWidth: number, mapHeight: number, count: number): Obstacle[] {
   const obstacles: Obstacle[] = [];
   const safeZoneStart = MAP_CONFIG.SAFE_ZONE_START;
   const safeZoneEnd = mapHeight - MAP_CONFIG.SAFE_ZONE_END;
 
+  // Pick a random theme for this game
+  const themeColors = getRandomThemeColors();
+
   for (let i = 0; i < count; i++) {
     const type = Math.random() < OBSTACLE_CONFIG.RECTANGLE_PROBABILITY ? 'rectangle' : 'circle';
-    const color = OBSTACLE_CONFIG.COLORS[Math.floor(Math.random() * OBSTACLE_CONFIG.COLORS.length)];
+    const color = themeColors[Math.floor(Math.random() * themeColors.length)];
 
     let obstacle: Obstacle;
 
