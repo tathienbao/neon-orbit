@@ -1,0 +1,6 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="50" cy="50" r="40" fill="hsl(25, 30%, 32%)"/>
+  <circle cx="50" cy="50" r="35" fill="none" stroke="hsl(25, 25%, 25%)" stroke-width="3"/>
+  <circle cx="50" cy="50" r="20" fill="none" stroke="hsl(25, 25%, 25%)" stroke-width="2"/>
+  <circle cx="50" cy="50" r="6" fill="hsl(25, 25%, 22%)"/>
+</svg>

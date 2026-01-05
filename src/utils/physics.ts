@@ -3,6 +3,20 @@ import { PHYSICS_CONFIG } from '@/config/gameConfig';
 
 const { FRICTION, MIN_VELOCITY, RESTITUTION } = PHYSICS_CONFIG;
 
+// Collision event for triggering effects
+export interface CollisionEvent {
+  type: 'wall' | 'obstacle' | 'marble' | 'goal';
+  position: Vector2D;
+  velocity: number;
+  color: string;
+  marbleId: number;
+}
+
+export interface PhysicsResult {
+  marbles: Marble[];
+  collisions: CollisionEvent[];
+}
+
 // Vector utilities
 export function magnitude(v: Vector2D): number {
   return Math.sqrt(v.x * v.x + v.y * v.y);
@@ -30,11 +44,18 @@ export function scale(v: Vector2D, s: number): Vector2D {
   return { x: v.x * s, y: v.y * s };
 }
 
-export function updateMarblePhysics(marble: Marble, mapWidth: number, mapHeight: number): Marble {
-  if (!marble.isMoving) return marble;
+export interface MarblePhysicsResult {
+  marble: Marble;
+  wallCollision: CollisionEvent | null;
+}
+
+export function updateMarblePhysics(marble: Marble, mapWidth: number, mapHeight: number): MarblePhysicsResult {
+  if (!marble.isMoving) return { marble, wallCollision: null };
 
   let newVelocity = { ...marble.velocity };
   let newPosition = add(marble.position, newVelocity);
+  let wallCollision: CollisionEvent | null = null;
+  const speed = magnitude(marble.velocity);
 
   // Apply friction
   newVelocity = scale(newVelocity, FRICTION);
@@ -43,33 +64,48 @@ export function updateMarblePhysics(marble: Marble, mapWidth: number, mapHeight:
   if (newPosition.x - marble.radius < 0) {
     newPosition.x = marble.radius;
     newVelocity.x = -newVelocity.x * RESTITUTION;
+    if (speed > 2) {
+      wallCollision = { type: 'wall', position: { x: marble.radius, y: newPosition.y }, velocity: speed, color: marble.glowColor, marbleId: marble.id };
+    }
   }
   if (newPosition.x + marble.radius > mapWidth) {
     newPosition.x = mapWidth - marble.radius;
     newVelocity.x = -newVelocity.x * RESTITUTION;
+    if (speed > 2) {
+      wallCollision = { type: 'wall', position: { x: mapWidth - marble.radius, y: newPosition.y }, velocity: speed, color: marble.glowColor, marbleId: marble.id };
+    }
   }
   if (newPosition.y - marble.radius < 0) {
     newPosition.y = marble.radius;
     newVelocity.y = -newVelocity.y * RESTITUTION;
+    if (speed > 2) {
+      wallCollision = { type: 'wall', position: { x: newPosition.x, y: marble.radius }, velocity: speed, color: marble.glowColor, marbleId: marble.id };
+    }
   }
   if (newPosition.y + marble.radius > mapHeight) {
     newPosition.y = mapHeight - marble.radius;
     newVelocity.y = -newVelocity.y * RESTITUTION;
+    if (speed > 2) {
+      wallCollision = { type: 'wall', position: { x: newPosition.x, y: mapHeight - marble.radius }, velocity: speed, color: marble.glowColor, marbleId: marble.id };
+    }
   }
 
   // Check if stopped
-  const speed = magnitude(newVelocity);
-  const isMoving = speed > MIN_VELOCITY;
+  const newSpeed = magnitude(newVelocity);
+  const isMoving = newSpeed > MIN_VELOCITY;
 
   if (!isMoving) {
     newVelocity = { x: 0, y: 0 };
   }
 
   return {
-    ...marble,
-    position: newPosition,
-    velocity: newVelocity,
-    isMoving,
+    marble: {
+      ...marble,
+      position: newPosition,
+      velocity: newVelocity,
+      isMoving,
+    },
+    wallCollision,
   };
 }
 
@@ -187,16 +223,33 @@ export function checkGoalCollision(marble: Marble, goal: Goal): boolean {
 }
 
 // Refactored to support any number of players
-export function processCollisions(marbles: Marble[], obstacles: Obstacle[], goal: Goal): Marble[] {
+export function processCollisions(marbles: Marble[], obstacles: Obstacle[], goal: Goal): PhysicsResult {
   const result = marbles.map(m => ({ ...m }));
+  const collisions: CollisionEvent[] = [];
 
   // Marble-marble collisions (all pairs)
   for (let i = 0; i < result.length; i++) {
     for (let j = i + 1; j < result.length; j++) {
       if (checkMarbleCollision(result[i], result[j])) {
+        const speed = magnitude(subtract(result[i].velocity, result[j].velocity));
+        const midpoint = {
+          x: (result[i].position.x + result[j].position.x) / 2,
+          y: (result[i].position.y + result[j].position.y) / 2,
+        };
+
         const [newM1, newM2] = resolveMarbleCollision(result[i], result[j]);
         result[i] = newM1;
         result[j] = newM2;
+
+        if (speed > 2) {
+          collisions.push({
+            type: 'marble',
+            position: midpoint,
+            velocity: speed,
+            color: result[i].glowColor,
+            marbleId: result[i].id,
+          });
+        }
       }
     }
   }
@@ -204,10 +257,25 @@ export function processCollisions(marbles: Marble[], obstacles: Obstacle[], goal
   // Marble-obstacle collisions
   for (let i = 0; i < result.length; i++) {
     for (const obstacle of obstacles) {
+      const speed = magnitude(result[i].velocity);
+      let collided = false;
+
       if (obstacle.type === 'circle' && checkCircleObstacleCollision(result[i], obstacle)) {
         result[i] = resolveCircleObstacleCollision(result[i], obstacle);
+        collided = true;
       } else if (obstacle.type === 'rectangle' && checkRectObstacleCollision(result[i], obstacle)) {
         result[i] = resolveRectObstacleCollision(result[i], obstacle);
+        collided = true;
+      }
+
+      if (collided && speed > 2) {
+        collisions.push({
+          type: 'obstacle',
+          position: { ...result[i].position },
+          velocity: speed,
+          color: result[i].glowColor,
+          marbleId: result[i].id,
+        });
       }
     }
   }
@@ -215,9 +283,16 @@ export function processCollisions(marbles: Marble[], obstacles: Obstacle[], goal
   // Goal collision
   for (let i = 0; i < result.length; i++) {
     if (!result[i].hasFinished && checkGoalCollision(result[i], goal)) {
+      collisions.push({
+        type: 'goal',
+        position: { ...goal.position },
+        velocity: magnitude(result[i].velocity),
+        color: result[i].glowColor,
+        marbleId: result[i].id,
+      });
       result[i] = { ...result[i], hasFinished: true, isMoving: false, velocity: { x: 0, y: 0 } };
     }
   }
 
-  return result;
+  return { marbles: result, collisions };
 }

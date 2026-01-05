@@ -60,53 +60,84 @@ export const LAYOUT_CONFIG = {
 } as const;
 
 export const OBSTACLE_CONFIG = {
-  // Probability of rectangle (vs circle)
-  RECTANGLE_PROBABILITY: 0.6,
-  // Rectangle size ranges
-  RECTANGLE_WIDTH_MIN: 40,
-  RECTANGLE_WIDTH_MAX: 120,
-  RECTANGLE_HEIGHT_MIN: 20,
-  RECTANGLE_HEIGHT_MAX: 80,
-  // Circle size ranges
-  CIRCLE_RADIUS_MIN: 20,
-  CIRCLE_RADIUS_MAX: 50,
-  // Obstacle color themes - MUTED palettes (don't compete with marbles)
-  // Each game randomly picks one theme
-  THEMES: {
-    ice: [
-      'hsl(200, 40%, 35%)',   // ice blue
-      'hsl(220, 35%, 40%)',   // steel blue
-      'hsl(180, 30%, 30%)',   // dark cyan
-    ],
-    lava: [
-      'hsl(0, 35%, 30%)',     // dark red
-      'hsl(20, 40%, 35%)',    // burnt orange
-      'hsl(350, 30%, 25%)',   // maroon
-    ],
-    forest: [
-      'hsl(140, 30%, 28%)',   // dark green
-      'hsl(80, 25%, 32%)',    // olive
-      'hsl(160, 25%, 25%)',   // teal dark
-    ],
-    space: [
-      'hsl(260, 35%, 30%)',   // deep purple
-      'hsl(240, 30%, 35%)',   // navy
-      'hsl(280, 25%, 28%)',   // dark violet
-    ],
-    gold: [
-      'hsl(40, 35%, 35%)',    // bronze
-      'hsl(25, 40%, 30%)',    // copper
-      'hsl(45, 30%, 28%)',    // dark gold
-    ],
-  },
-  // Fallback colors (randomly selected theme)
-  COLORS: [
-    'hsl(220, 30%, 35%)',
-    'hsl(240, 25%, 30%)',
-    'hsl(200, 35%, 40%)',
-  ],
   // Reduced glow for obstacles
   GLOW_BLUR: 8,
+  // Color themes - MUTED palettes (don't compete with marbles)
+  THEMES: {
+    ice: ['hsl(200, 30%, 32%)', 'hsl(220, 30%, 35%)', 'hsl(190, 25%, 30%)'],
+    lava: ['hsl(0, 30%, 32%)', 'hsl(20, 30%, 35%)', 'hsl(350, 25%, 28%)'],
+    forest: ['hsl(120, 28%, 30%)', 'hsl(100, 25%, 32%)', 'hsl(140, 25%, 28%)'],
+    space: ['hsl(260, 30%, 32%)', 'hsl(240, 28%, 35%)', 'hsl(280, 25%, 30%)'],
+    gold: ['hsl(40, 30%, 32%)', 'hsl(25, 30%, 35%)', 'hsl(45, 25%, 30%)'],
+  },
+} as const;
+
+// Module-based obstacle system
+export const MODULE_CONFIG = {
+  // Fixed obstacle sizes (no random sizing)
+  MODULES: {
+    // Square modules
+    'square-s': { type: 'rectangle' as const, width: 50, height: 50 },
+    'square-m': { type: 'rectangle' as const, width: 70, height: 70 },
+    // Wide modules (horizontal)
+    'wide-s': { type: 'rectangle' as const, width: 80, height: 35 },
+    'wide-m': { type: 'rectangle' as const, width: 100, height: 45 },
+    // Tall modules (vertical)
+    'tall-s': { type: 'rectangle' as const, width: 35, height: 80 },
+    'tall-m': { type: 'rectangle' as const, width: 45, height: 100 },
+    // Circle modules
+    'circle-s': { type: 'circle' as const, radius: 25 },
+    'circle-m': { type: 'circle' as const, radius: 35 },
+    'circle-l': { type: 'circle' as const, radius: 45 },
+  },
+
+  // Which modules each skin fits
+  SKIN_MODULES: {
+    // Circle skins
+    'nature/tree-round': ['circle-m', 'circle-l'],
+    'nature/bush': ['circle-s', 'circle-m'],
+    'nature/rock': ['circle-s', 'circle-m'],
+    'nature/pond': ['circle-m', 'circle-l'],
+    'nature/flower': ['circle-s'],
+    'nature/mushroom': ['circle-s', 'circle-m'],
+    'street/barrel': ['circle-s'],
+    'street/manhole': ['circle-s', 'circle-m'],
+    'vehicles/tire': ['circle-s'],
+    'sports/ball-soccer': ['circle-s'],
+    // Rectangle skins - square
+    'buildings/house': ['square-m'],
+    'buildings/shed': ['square-s', 'square-m'],
+    'street/crate': ['square-s'],
+    'street/dumpster': ['square-s', 'square-m'],
+    // Rectangle skins - wide (horizontal)
+    'street/fence': ['wide-s', 'wide-m'],
+    'street/bench': ['wide-s'],
+    'street/picnic-table': ['wide-m'],
+    'nature/log': ['wide-s'],
+    // Rectangle skins - tall (vertical)
+    'vehicles/car': ['tall-s'],
+    'vehicles/truck': ['tall-m'],
+  } as Record<string, string[]>,
+
+  // Rotation rules per module type
+  ROTATIONS: {
+    'square-s': [0, 90, 180, 270],
+    'square-m': [0, 90, 180, 270],
+    'wide-s': [0, 180],      // Horizontal only
+    'wide-m': [0, 180],
+    'tall-s': [0, 180],      // Keep vertical (skin is drawn vertical)
+    'tall-m': [0, 180],
+    'circle-s': [0],         // No rotation needed
+    'circle-m': [0],
+    'circle-l': [0],
+  } as Record<string, number[]>,
+
+  // Grid placement settings
+  GRID: {
+    CELL_SIZE: 120,          // Grid cell size in pixels
+    MIN_SPACING: 30,         // Minimum space between obstacles
+    FILL_RATIO: 0.35,        // ~35% of cells have obstacles
+  },
 } as const;
 
 export const GOAL_CONFIG = {
@@ -142,6 +173,13 @@ export const CANVAS_CONFIG = {
 export const UI_CONFIG = {
   // Toast duration in ms
   TOAST_DURATION: 2000,
+} as const;
+
+export const SKIN_CONFIG = {
+  // All available skins (derived from MODULE_CONFIG.SKIN_MODULES)
+  ALL_SKINS: Object.keys(MODULE_CONFIG.SKIN_MODULES),
+  // Base path for SVG files
+  BASE_PATH: '/obstacles/',
 } as const;
 
 export const CAMERA_CONFIG = {

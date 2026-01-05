@@ -1,9 +1,5 @@
 import { Obstacle, Goal, Marble, GameState } from '@/types/game';
-import { MAP_CONFIG, OBSTACLE_CONFIG, MARBLE_CONFIG } from '@/config/gameConfig';
-
-function randomInRange(min: number, max: number): number {
-  return Math.random() * (max - min) + min;
-}
+import { MAP_CONFIG, OBSTACLE_CONFIG, MARBLE_CONFIG, MODULE_CONFIG } from '@/config/gameConfig';
 
 // Get random theme colors for this game
 function getRandomThemeColors(): string[] {
@@ -12,46 +8,116 @@ function getRandomThemeColors(): string[] {
   return randomTheme as string[];
 }
 
-function generateObstacles(mapWidth: number, mapHeight: number, count: number): Obstacle[] {
+// Get random element from array
+function randomFrom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Find all skins that fit a given module
+function getSkinsForModule(moduleKey: string): string[] {
+  return Object.entries(MODULE_CONFIG.SKIN_MODULES)
+    .filter(([_, modules]) => modules.includes(moduleKey))
+    .map(([skin]) => skin);
+}
+
+// Generate obstacles using module-based grid system
+function generateObstacles(mapWidth: number, mapHeight: number): Obstacle[] {
   const obstacles: Obstacle[] = [];
   const safeZoneStart = MAP_CONFIG.SAFE_ZONE_START;
   const safeZoneEnd = mapHeight - MAP_CONFIG.SAFE_ZONE_END;
+  const playableHeight = safeZoneEnd - safeZoneStart;
 
-  // Pick a random theme for this game
+  // Grid settings
+  const cellSize = MODULE_CONFIG.GRID.CELL_SIZE;
+  const fillRatio = MODULE_CONFIG.GRID.FILL_RATIO;
+
+  // Calculate grid dimensions
+  const cols = Math.floor(mapWidth / cellSize);
+  const rows = Math.floor(playableHeight / cellSize);
+
+  // Create grid and mark cells for obstacles
+  const grid: boolean[][] = Array(rows).fill(null).map(() => Array(cols).fill(false));
+
+  // Randomly mark cells for obstacles
+  const totalCells = rows * cols;
+  const targetObstacles = Math.floor(totalCells * fillRatio);
+
+  // Get theme colors
   const themeColors = getRandomThemeColors();
 
-  for (let i = 0; i < count; i++) {
-    const type = Math.random() < OBSTACLE_CONFIG.RECTANGLE_PROBABILITY ? 'rectangle' : 'circle';
-    const color = themeColors[Math.floor(Math.random() * themeColors.length)];
+  // Get all available modules
+  const moduleKeys = Object.keys(MODULE_CONFIG.MODULES);
 
-    let obstacle: Obstacle;
+  let obstacleId = 0;
+  let attempts = 0;
+  const maxAttempts = targetObstacles * 3;
 
-    if (type === 'rectangle') {
-      const width = randomInRange(OBSTACLE_CONFIG.RECTANGLE_WIDTH_MIN, OBSTACLE_CONFIG.RECTANGLE_WIDTH_MAX);
-      const height = randomInRange(OBSTACLE_CONFIG.RECTANGLE_HEIGHT_MIN, OBSTACLE_CONFIG.RECTANGLE_HEIGHT_MAX);
-      obstacle = {
-        id: i,
-        type: 'rectangle',
-        position: {
-          x: randomInRange(width / 2 + 20, mapWidth - width / 2 - 20),
-          y: randomInRange(safeZoneStart, safeZoneEnd),
-        },
-        width,
-        height,
-        color,
-      };
+  while (obstacles.length < targetObstacles && attempts < maxAttempts) {
+    attempts++;
+
+    // Pick random cell
+    const row = Math.floor(Math.random() * rows);
+    const col = Math.floor(Math.random() * cols);
+
+    // Skip if cell already occupied
+    if (grid[row][col]) continue;
+
+    // Pick random module
+    const moduleKey = randomFrom(moduleKeys);
+    const module = MODULE_CONFIG.MODULES[moduleKey as keyof typeof MODULE_CONFIG.MODULES];
+
+    // Find compatible skins
+    const compatibleSkins = getSkinsForModule(moduleKey);
+    if (compatibleSkins.length === 0) continue;
+
+    // Pick random skin
+    const skin = randomFrom(compatibleSkins);
+
+    // Get allowed rotations for this module
+    const allowedRotations = MODULE_CONFIG.ROTATIONS[moduleKey] || [0];
+    const rotation = randomFrom(allowedRotations);
+
+    // Calculate position (center of cell)
+    const cellX = col * cellSize + cellSize / 2;
+    const cellY = safeZoneStart + row * cellSize + cellSize / 2;
+
+    // Ensure obstacle fits within map bounds
+    let width = 0, height = 0, radius = 0;
+    if (module.type === 'rectangle') {
+      width = (module as { width: number; height: number }).width;
+      height = (module as { width: number; height: number }).height;
+
+      // Check bounds
+      if (cellX - width / 2 < 20 || cellX + width / 2 > mapWidth - 20) continue;
     } else {
-      const radius = randomInRange(OBSTACLE_CONFIG.CIRCLE_RADIUS_MIN, OBSTACLE_CONFIG.CIRCLE_RADIUS_MAX);
-      obstacle = {
-        id: i,
-        type: 'circle',
-        position: {
-          x: randomInRange(radius + 20, mapWidth - radius - 20),
-          y: randomInRange(safeZoneStart, safeZoneEnd),
-        },
-        radius,
-        color,
-      };
+      radius = (module as { radius: number }).radius;
+
+      // Check bounds
+      if (cellX - radius < 20 || cellX + radius > mapWidth - 20) continue;
+    }
+
+    // Mark cell as occupied
+    grid[row][col] = true;
+
+    // Pick random color from theme
+    const color = randomFrom(themeColors);
+
+    // Create obstacle
+    const obstacle: Obstacle = {
+      id: obstacleId++,
+      type: module.type,
+      position: { x: cellX, y: cellY },
+      color,
+      skin,
+      rotation,
+      module: moduleKey,
+    };
+
+    if (module.type === 'rectangle') {
+      obstacle.width = width;
+      obstacle.height = height;
+    } else {
+      obstacle.radius = radius;
     }
 
     obstacles.push(obstacle);
@@ -96,8 +162,7 @@ export function generateMap(screenWidth: number, screenHeight: number): GameStat
     radius: MAP_CONFIG.GOAL_RADIUS,
   };
 
-  const obstacleCount = Math.floor(mapHeight / MAP_CONFIG.OBSTACLES_PER_HEIGHT);
-  const obstacles = generateObstacles(mapWidth, mapHeight, obstacleCount);
+  const obstacles = generateObstacles(mapWidth, mapHeight);
 
   return {
     marbles,

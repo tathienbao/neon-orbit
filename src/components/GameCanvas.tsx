@@ -1,7 +1,9 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GameState } from '@/types/game';
-import { updateMarblePhysics, processCollisions } from '@/utils/physics';
-import { CANVAS_CONFIG, CAMERA_CONFIG, OBSTACLE_CONFIG, GOAL_CONFIG } from '@/config/gameConfig';
+import { updateMarblePhysics, processCollisions, CollisionEvent, magnitude } from '@/utils/physics';
+import { CANVAS_CONFIG, CAMERA_CONFIG, OBSTACLE_CONFIG, GOAL_CONFIG, SKIN_CONFIG } from '@/config/gameConfig';
+import { ScreenShake } from '@/utils/screenShake';
+import { ParticleSystem } from '@/utils/particles';
 
 interface GameCanvasProps {
   gameState: GameState;
@@ -27,6 +29,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [showGoalIndicator, setShowGoalIndicator] = useState(true);
   const [indicatorTick, setIndicatorTick] = useState(0);
   const goalIndicatorTimeRef = useRef(Date.now());
+
+  // SVG skin image cache
+  const skinCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const [skinsLoaded, setSkinsLoaded] = useState(false);
+
+  // Screen shake and particle systems
+  const screenShakeRef = useRef(new ScreenShake());
+  const particleSystemRef = useRef(new ParticleSystem());
+  const [shakeOffset, setShakeOffset] = useState({ x: 0, y: 0 });
 
   // Use refs to avoid recreating game loop on every state change
   const gameStateRef = useRef(gameState);
@@ -114,6 +125,31 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   useEffect(() => {
     showDebugBoundaryRef.current = showDebugBoundary;
   }, [showDebugBoundary]);
+
+  // Preload all SVG skins
+  useEffect(() => {
+    const allSkins = SKIN_CONFIG.ALL_SKINS;
+    let loadedCount = 0;
+
+    allSkins.forEach(skin => {
+      const img = new Image();
+      img.onload = () => {
+        skinCacheRef.current.set(skin, img);
+        loadedCount++;
+        if (loadedCount === allSkins.length) {
+          setSkinsLoaded(true);
+        }
+      };
+      img.onerror = () => {
+        // Still count as loaded to not block rendering
+        loadedCount++;
+        if (loadedCount === allSkins.length) {
+          setSkinsLoaded(true);
+        }
+      };
+      img.src = `${SKIN_CONFIG.BASE_PATH}${skin}.svg`;
+    });
+  }, []);
 
   // Goal indicator animation: blink for 3 seconds
   useEffect(() => {
@@ -267,20 +303,58 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       }
 
       let anyMoving = false;
+      const allCollisions: CollisionEvent[] = [];
+
+      // Update marble physics and collect wall collisions
       let newMarbles = state.marbles.map(marble => {
         if (marble.isMoving) {
-          const updated = updateMarblePhysics(marble, state.mapWidth, state.mapHeight);
-          if (updated.isMoving) anyMoving = true;
-          return updated;
+          const result = updateMarblePhysics(marble, state.mapWidth, state.mapHeight);
+          if (result.marble.isMoving) anyMoving = true;
+          if (result.wallCollision) {
+            allCollisions.push(result.wallCollision);
+          }
+          // Emit trail particles for moving marbles
+          const speed = magnitude(marble.velocity);
+          particleSystemRef.current.trail(marble.position.x, marble.position.y, marble.glowColor, speed);
+          return result.marble;
         }
         return marble;
       });
 
-      // Process collisions
-      newMarbles = processCollisions(newMarbles, state.obstacles, state.goal);
+      // Process collisions (marble-marble, marble-obstacle, goal)
+      const collisionResult = processCollisions(newMarbles, state.obstacles, state.goal);
+      newMarbles = collisionResult.marbles;
+      allCollisions.push(...collisionResult.collisions);
 
       // Check if any marble is still moving after collision
       anyMoving = newMarbles.some(m => m.isMoving);
+
+      // Process collision events for effects
+      for (const collision of allCollisions) {
+        const intensity = Math.min(collision.velocity / 3, 8);
+
+        if (collision.type === 'goal') {
+          // Big explosion for goal!
+          screenShakeRef.current.shake(15);
+          particleSystemRef.current.goalExplosion(collision.position.x, collision.position.y, collision.color);
+        } else if (collision.type === 'wall') {
+          screenShakeRef.current.shake(intensity * 0.5);
+          particleSystemRef.current.wallHit(collision.position.x, collision.position.y, collision.color, collision.velocity);
+        } else {
+          // obstacle or marble collision
+          screenShakeRef.current.shake(intensity);
+          particleSystemRef.current.collision(collision.position.x, collision.position.y, collision.color, collision.velocity);
+        }
+      }
+
+      // Update screen shake (only update state when shaking)
+      const newShakeOffset = screenShakeRef.current.update();
+      if (screenShakeRef.current.isShaking() || newShakeOffset.x !== 0 || newShakeOffset.y !== 0) {
+        setShakeOffset({ ...newShakeOffset });
+      }
+
+      // Update particles
+      particleSystemRef.current.update();
 
       // Check win condition
       let winner: number | null = null;
@@ -379,7 +453,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
 
     ctx.save();
-    ctx.translate(0, -scrollY);
+    // Apply screen shake offset
+    ctx.translate(shakeOffset.x, -scrollY + shakeOffset.y);
 
     // Draw goal - Black Hole Effect
     const goal = gameState.goal;
@@ -448,36 +523,91 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // Draw obstacles (muted colors, reduced glow)
+    // Draw obstacles with SVG skins
     for (const obstacle of gameState.obstacles) {
-      ctx.fillStyle = obstacle.color;
+      const skinImg = obstacle.skin ? skinCacheRef.current.get(obstacle.skin) : null;
+
+      ctx.save();
+
+      // Position and rotation
+      ctx.translate(obstacle.position.x, obstacle.position.y);
+      if (obstacle.rotation) {
+        ctx.rotate((obstacle.rotation * Math.PI) / 180);
+      }
+
+      // Glow effect
       ctx.shadowColor = obstacle.color;
       ctx.shadowBlur = OBSTACLE_CONFIG.GLOW_BLUR;
 
       if (obstacle.type === 'rectangle' && obstacle.width && obstacle.height) {
-        ctx.fillRect(
-          obstacle.position.x - obstacle.width / 2,
-          obstacle.position.y - obstacle.height / 2,
-          obstacle.width,
-          obstacle.height
-        );
-        ctx.strokeStyle = obstacle.color;
+        const w = obstacle.width;
+        const h = obstacle.height;
+
+        // Subtle hitbox glow (always visible)
+        ctx.strokeStyle = 'hsla(200, 60%, 50%, 0.25)';
         ctx.lineWidth = 2;
-        ctx.strokeRect(
-          obstacle.position.x - obstacle.width / 2,
-          obstacle.position.y - obstacle.height / 2,
-          obstacle.width,
-          obstacle.height
-        );
+        ctx.shadowColor = 'hsla(200, 60%, 50%, 0.4)';
+        ctx.shadowBlur = 6;
+        ctx.strokeRect(-w / 2, -h / 2, w, h);
+        ctx.shadowBlur = OBSTACLE_CONFIG.GLOW_BLUR;
+
+        if (skinImg) {
+          // Draw SVG skin
+          ctx.drawImage(skinImg, -w / 2, -h / 2, w, h);
+        } else {
+          // Fallback to simple rectangle
+          ctx.fillStyle = obstacle.color;
+          ctx.fillRect(-w / 2, -h / 2, w, h);
+        }
+
+        // Debug: bright hitbox outline
+        if (showDebugBoundary) {
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = 'hsla(60, 100%, 50%, 0.8)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.strokeRect(-w / 2, -h / 2, w, h);
+          ctx.setLineDash([]);
+        }
       } else if (obstacle.type === 'circle' && obstacle.radius) {
-        ctx.beginPath();
-        ctx.arc(obstacle.position.x, obstacle.position.y, obstacle.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = obstacle.color;
+        const r = obstacle.radius;
+        const size = r * 2;
+
+        // Subtle hitbox glow (always visible)
+        ctx.strokeStyle = 'hsla(200, 60%, 50%, 0.25)';
         ctx.lineWidth = 2;
+        ctx.shadowColor = 'hsla(200, 60%, 50%, 0.4)';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.shadowBlur = OBSTACLE_CONFIG.GLOW_BLUR;
+
+        if (skinImg) {
+          // Draw SVG skin
+          ctx.drawImage(skinImg, -r, -r, size, size);
+        } else {
+          // Fallback to simple circle
+          ctx.fillStyle = obstacle.color;
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Debug: bright hitbox outline
+        if (showDebugBoundary) {
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = 'hsla(60, 100%, 50%, 0.8)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
       }
-      ctx.shadowBlur = 0;
+
+      ctx.restore();
     }
 
     // Draw marbles
@@ -519,6 +649,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       ctx.textBaseline = 'middle';
       ctx.fillText(`${marble.id + 1}`, marble.position.x, marble.position.y);
     }
+
+    // Draw particles (in world space, before restoring)
+    particleSystemRef.current.render(ctx, 0);
 
     ctx.restore();
 
@@ -606,11 +739,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       ctx.font = '10px monospace';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText('BOUNDARY ZONE', 5, 5);
-      ctx.fillText('(fast camera)', 5, 17);
+      ctx.fillText('DEBUG MODE [C]', 5, 5);
+      ctx.fillText('Orange: camera zone', 5, 17);
+      ctx.fillStyle = 'hsla(60, 100%, 50%, 0.8)';
+      ctx.fillText('Yellow: hitboxes', 5, 29);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState, scrollY, showDebugBoundary, showGoalIndicator, indicatorTick]);
+  }, [gameState, scrollY, showDebugBoundary, showGoalIndicator, indicatorTick, shakeOffset]);
 
   // Render on state change
   useEffect(() => {

@@ -1,0 +1,9 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect x="5" y="35" width="90" height="30" fill="hsl(40, 30%, 35%)"/>
+  <line x1="20" y1="35" x2="20" y2="65" stroke="hsl(40, 25%, 28%)" stroke-width="2"/>
+  <line x1="40" y1="35" x2="40" y2="65" stroke="hsl(40, 25%, 28%)" stroke-width="2"/>
+  <line x1="60" y1="35" x2="60" y2="65" stroke="hsl(40, 25%, 28%)" stroke-width="2"/>
+  <line x1="80" y1="35" x2="80" y2="65" stroke="hsl(40, 25%, 28%)" stroke-width="2"/>
+  <rect x="8" y="30" width="10" height="40" fill="hsl(40, 30%, 32%)"/>
+  <rect x="82" y="30" width="10" height="40" fill="hsl(40, 30%, 32%)"/>
+</svg>
